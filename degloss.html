@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyAiPlug - Reverb De-Gloss™</title>
+    <style>
+        :root {
+            /* BRANDING & ACCENTS */
+            --accent-grad: linear-gradient(135deg, #00f2ff, #9d00ff);
+            --accent-cyan: #00f2ff;
+            --accent-purple: #9d00ff;
+            --accent-pink: #ff1493;
+            --accent-glow: rgba(0, 242, 255, 0.6);
+            --reverb-primary: #00f2ff;
+            --reverb-secondary: #9d00ff;
+            --reverb-tertiary: #ff1493;
+
+            /* THEME VARIABLES (Default: Dark Mode) */
+            --bg-body: #0a0a0a;
+            --bg-gradient: radial-gradient(circle at center, #1f1f1f 0%, #000 100%);
+            
+            --faceplate-base: #2a2a2a;
+            --faceplate-grad: linear-gradient(180deg, #333 0%, #1a1a1a 100%);
+            --faceplate-border: #444;
+            --faceplate-shadow: rgba(0,0,0,0.8);
+            
+            --panel-inset: rgba(0,0,0,0.3);
+            --text-engraved: #888;
+            --text-active: #fff;
+            
+            --knob-body: #111;
+            --knob-cap: #333;
+            --knob-border: #000;
+            
+            --meter-bg: #000;
+            --meter-border: #444;
+
+            --metal-brush: repeating-linear-gradient(90deg, transparent 0, transparent 1px, rgba(255,255,255,0.02) 1px, rgba(255,255,255,0.02) 2px);
+        }
+
+        /* LIGHT MODE OVERRIDES */
+        body.light-mode {
+            --bg-body: #d0d0d0;
+            --bg-gradient: radial-gradient(circle at center, #f0f0f0 0%, #ccc 100%);
+            
+            --faceplate-base: #e0e0e0;
+            --faceplate-grad: linear-gradient(180deg, #f9f9f9 0%, #bfbfbf 100%);
+            --faceplate-border: #fff;
+            --faceplate-shadow: rgba(0,0,0,0.3);
+            
+            --panel-inset: rgba(255,255,255,0.5);
+            --text-engraved: #444;
+            --text-active: #000;
+            
+            --knob-body: #ddd;
+            --knob-cap: #f0f0f0;
+            --knob-border: #999;
+            
+            --meter-bg: #222;
+            --meter-border: #888;
+
+            --metal-brush: repeating-linear-gradient(90deg, transparent 0, transparent 1px, rgba(0,0,0,0.05) 1px, rgba(0,0,0,0.05) 2px);
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background-color: var(--bg-body);
+            background-image: var(--bg-gradient);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: var(--text-engraved);
+            overflow-x: hidden;
+            transition: background 0.5s;
+            padding: 20px;
+        }
+
+        /* BRANDING HEADER */
+        .brand-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--faceplate-border);
+            box-shadow: 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .brand-badge {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .brand-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 8px;
+            background: var(--accent-grad);
+            box-shadow: 0 0 15px var(--accent-glow);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .brand-icon svg {
+            width: 24px;
+            height: 24px;
+            fill: white;
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5));
+        }
+        .brand-info h1 {
+            margin: 0;
+            font-size: 18px;
+            background: var(--accent-grad);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .brand-info span {
+            font-size: 10px;
+            letter-spacing: 2px;
+            opacity: 0.8;
+            font-weight: 600;
+            color: var(--text-engraved);
+        }
+
+        /* Main Unit Faceplate */
+        .plugin-faceplate {
+            width: 1000px;
+            min-height: 900px;
+            background-color: var(--faceplate-base);
+            background-image: 
+                var(--metal-brush),
+                var(--faceplate-grad);
+            border-radius: 16px;
+            box-shadow: 
+                0 0 0 1px #111,
+                0 30px 80px var(--faceplate-shadow),
+                inset 0 1px 0 rgba(255,255,255,0.3);
+            padding: 30px 40px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            transition: background 0.5s;
+        }
+
+        /* Screws */
+        .screw {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: radial-gradient(circle at 30% 30%, #eee, #555);
+            border-radius: 50%;
+            border: 1px solid #222;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        .screw::before, .screw::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            background: #333;
+            transform: translate(-50%, -50%);
+        }
+        .screw::before { width: 8px; height: 2px; transform: translate(-50%, -50%) rotate(45deg); }
+        .screw::after { width: 8px; height: 2px; transform: translate(-50%, -50%) rotate(-45deg); }
+        
+        .screw.tl { top: 15px; left: 15px; }
+        .screw.tr { top: 15px; right: 15px; }
+        .screw.bl { bottom: 15px; left: 15px; }
+        .screw.br { bottom: 15px; right: 15px; }
+
+        /* THEME TOGGLE */
+        .theme-toggle {
+            position: absolute;
+            top: 25px;
+            right: 40px;
+            width: 40px;
+            height: 20px;
+            background: #111;
+            border-radius: 20px;
+            cursor: pointer;
+            border: 1px solid #555;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+        }
+        .theme-toggle::after {
+            content: '';
+            position: absolute;
+            left: 2px; top: 2px;
+            width: 14px; height: 14px;
+            border-radius: 50%;
+            background: #fff;
+            transition: 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+        body.light-mode .theme-toggle { background: #ccc; }
+        body.light-mode .theme-toggle::after { left: 22px; background: #333; }
+
+        /* LCD / Control Area */
+        .lcd-panel {
+            background: var(--meter-bg);
+            border-radius: 6px;
+            border: 1px solid var(--faceplate-border);
+            height: 50px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 15px;
+            margin-bottom: 20px;
+            box-shadow: inset 0 5px 15px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        .btn-metallic {
+            background: linear-gradient(to bottom, #444, #222);
+            color: #ccc;
+            border: 1px solid #000;
+            padding: 8px 14px;
+            font-size: 9px;
+            font-weight: 700;
+            border-radius: 3px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-metallic:hover, .btn-metallic.active-state {
+            background-image: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple), var(--accent-cyan));
+            background-size: 200% 100%;
+            animation: sweepGradient 2s linear infinite;
+            color: #fff;
+            text-shadow: 0 0 5px rgba(255,255,255,0.8);
+            border-color: transparent;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        @keyframes sweepGradient {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 100% 50%; }
+        }
+
+        .status-display {
+            font-family: 'Courier New', monospace;
+            color: var(--accent-cyan);
+            font-size: 11px;
+            text-transform: uppercase;
+            text-shadow: 0 0 5px var(--accent-glow);
+            letter-spacing: 1px;
+        }
+
+        input[type="file"] { display: none; }
+
+        /* REVERB VISUALIZER */
+        .reverb-visualizer {
+            width: 100%;
+            height: 300px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            position: relative;
+            margin: 30px 0;
+            background: radial-gradient(circle at center, rgba(157, 0, 255, 0.1), transparent 70%);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--faceplate-border);
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+            padding: 20px;
+        }
+
+        .reverb-tail {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            width: 100%;
+            height: 100%;
+            gap: 4px;
+        }
+
+        .tail-bar {
+            flex: 1;
+            background: linear-gradient(to top, var(--accent-cyan), var(--accent-purple));
+            border-radius: 2px;
+            transition: height 0.3s ease;
+            box-shadow: 0 0 10px var(--accent-glow);
+            min-height: 5px;
+        }
+
+        /* Main Control Area with 3 knobs */
+        .main-section {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--panel-inset);
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: 40px 60px;
+            height: 280px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+            position: relative;
+            z-index: 3;
+        }
+
+        /* Knob containers */
+        .knob-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* Side knobs */
+        .side-knob-body {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background-color: var(--knob-body);
+            background-image: repeating-radial-gradient(transparent, transparent 2px, rgba(0,0,0,0.1) 3px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+            position: relative;
+            cursor: ns-resize;
+            transform: rotate(0deg);
+            border: 1px solid var(--knob-border);
+            transition: transform 0.1s ease-out;
+        }
+
+        .side-knob-cap {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, var(--knob-cap), var(--knob-body));
+            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+            display: flex;
+            justify-content: center;
+            padding-top: 8px;
+        }
+
+        .side-knob-indicator {
+            width: 3px;
+            height: 25px;
+            background: var(--accent-cyan);
+            border-radius: 2px;
+            box-shadow: 0 0 5px var(--accent-glow);
+        }
+
+        .knob-label {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--text-engraved);
+            text-shadow: 0 1px 0 rgba(255,255,255,0.1);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
+        .knob-value {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            color: var(--accent-cyan);
+            text-shadow: 0 0 5px var(--accent-glow);
+            font-weight: bold;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        /* Main center knob (larger) */
+        .knob-surround {
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            background: conic-gradient(#444, #777, #444, #666, #444);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.6), inset 0 2px 5px rgba(255,255,255,0.3);
+            position: relative;
+        }
+
+        .main-knob-body {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background-color: var(--knob-body);
+            background-image: repeating-radial-gradient(transparent, transparent 2px, rgba(0,0,0,0.1) 3px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            position: relative;
+            cursor: ns-resize;
+            transform: rotate(0deg);
+            z-index: 5;
+            border: 1px solid var(--knob-border);
+            transition: transform 0.1s ease-out;
+        }
+        
+        .knob-cap {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            bottom: 12px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, var(--knob-cap), var(--knob-body));
+            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+            display: flex;
+            justify-content: center;
+            padding-top: 10px;
+        }
+
+        .indicator-line {
+            width: 4px;
+            height: 30px;
+            background: var(--accent-purple);
+            border-radius: 2px;
+            box-shadow: 0 0 5px var(--accent-purple);
+        }
+
+        /* Presets */
+        .presets-section {
+            margin: 20px 0;
+        }
+
+        .section-title {
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--text-engraved);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+            text-shadow: 0 1px 0 rgba(255,255,255,0.1);
+        }
+
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        .preset-btn {
+            padding: 12px 8px;
+            background: linear-gradient(to bottom, #333, #1a1a1a);
+            border: 1px solid #555;
+            border-radius: 6px;
+            color: var(--text-engraved);
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .preset-btn:hover, .preset-btn.active {
+            background: var(--accent-grad);
+            background-size: 200%;
+            animation: sweepGradient 2s linear infinite;
+            color: #fff;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 15px var(--accent-glow);
+            transform: translateY(-2px);
+        }
+
+        .engraved-label {
+            font-size: 9px;
+            font-weight: 800;
+            color: var(--text-engraved);
+            text-shadow: 0 1px 0 rgba(255,255,255,0.1);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Reverb Type Selector */
+        .reverb-type-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .type-btn {
+            padding: 10px;
+            background: linear-gradient(to bottom, #333, #1a1a1a);
+            border: 1px solid #555;
+            border-radius: 6px;
+            color: var(--text-engraved);
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .type-btn.active {
+            background: var(--accent-grad);
+            color: #fff;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="plugin-faceplate">
+        <!-- Decoration Screws -->
+        <div class="screw tl"></div>
+        <div class="screw tr"></div>
+        <div class="screw bl"></div>
+        <div class="screw br"></div>
+
+        <!-- Theme Toggle Switch -->
+        <div class="theme-toggle" onclick="document.body.classList.toggle('light-mode')" title="Toggle Light/Dark Mode"></div>
+
+        <!-- Branding Header -->
+        <div class="brand-header">
+            <div class="brand-badge">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"></path>
+                    </svg>
+                </div>
+                <div class="brand-info">
+                    <h1>MyAiPlug</h1>
+                    <span>REVERB DE-GLOSS™</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- LCD Panel -->
+        <div class="lcd-panel">
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-metallic" onclick="document.getElementById('audioFile').click()">Load Audio</button>
+                <input type="file" id="audioFile" accept="audio/*">
+                <button class="btn-metallic" id="playBtn" onclick="togglePlay()">Engage</button>
+                <button class="btn-metallic" id="downloadBtn" onclick="downloadProcessedAudio()">Export WAV</button>
+            </div>
+            <div class="status-display" id="statusText">SYSTEM READY</div>
+        </div>
+
+        <!-- Hidden Audio -->
+        <audio id="audioElement" crossorigin="anonymous"></audio>
+
+        <!-- Reverb Visualizer -->
+        <div class="reverb-visualizer">
+            <div class="reverb-tail" id="reverbTail">
+                <!-- Bars generated by JS -->
+            </div>
+        </div>
+
+        <!-- Main Section with Three Knobs -->
+        <div class="main-section">
+            <!-- Reduction Amount Knob (Left) -->
+            <div class="knob-container">
+                <div class="knob-label">Reduction</div>
+                <div class="side-knob-body" id="reductionKnob" data-val="50">
+                    <div class="side-knob-cap">
+                        <div class="side-knob-indicator"></div>
+                    </div>
+                </div>
+                <div class="knob-value" id="reductionValue">50%</div>
+            </div>
+
+            <!-- Master Output Knob (Center) -->
+            <div class="knob-container">
+                <div class="knob-label">Output</div>
+                <div class="knob-surround">
+                    <div class="main-knob-body" id="mainKnob">
+                        <div class="knob-cap">
+                            <div class="indicator-line"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="knob-value" id="outputValue">50%</div>
+            </div>
+
+            <!-- Decay Time Knob (Right) -->
+            <div class="knob-container">
+                <div class="knob-label">Decay Time</div>
+                <div class="side-knob-body" id="decayKnob" data-val="50">
+                    <div class="side-knob-cap">
+                        <div class="side-knob-indicator"></div>
+                    </div>
+                </div>
+                <div class="knob-value" id="decayValue">0.5s</div>
+            </div>
+        </div>
+
+        <!-- Reverb Type Selector -->
+        <div class="presets-section">
+            <div class="section-title">⊙ Reverb Type Detection ⊙</div>
+            <div class="reverb-type-grid">
+                <button class="type-btn active" onclick="selectType('auto', this)">Auto Detect</button>
+                <button class="type-btn" onclick="selectType('hall', this)">Hall</button>
+                <button class="type-btn" onclick="selectType('plate', this)">Plate</button>
+                <button class="type-btn" onclick="selectType('room', this)">Room</button>
+            </div>
+        </div>
+
+        <!-- Presets -->
+        <div class="presets-section">
+            <div class="section-title">◈ De-Gloss Presets ◈</div>
+            <div class="preset-grid">
+                <button class="preset-btn active" onclick="applyPreset('gentle', this)">Gentle</button>
+                <button class="preset-btn" onclick="applyPreset('moderate', this)">Moderate</button>
+                <button class="preset-btn" onclick="applyPreset('aggressive', this)">Aggressive</button>
+                <button class="preset-btn" onclick="applyPreset('surgical', this)">Surgical</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Constants
+        const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+        
+        // Audio context and nodes
+        let audioCtx;
+        let sourceNode, inputGainNode, outputGainNode, analyserNode, convolverNode;
+        let isPlaying = false;
+        let currentFileArrayBuffer = null;
+        let currentBlobUrl = null;
+        
+        // State tracking
+        let currentMainKnobVal = 50;
+        let currentReduction = 50; // 0-100%
+        let currentDecay = 50; // 0-100 (maps to 0-2 seconds)
+        const audioElement = document.getElementById('audioElement');
+        const playBtn = document.getElementById('playBtn');
+        const statusText = document.getElementById('statusText');
+        const fileInput = document.getElementById('audioFile');
+
+        // Initialize reverb tail visualization
+        function initReverbTail() {
+            const tail = document.getElementById('reverbTail');
+            for (let i = 0; i < 40; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'tail-bar';
+                const height = Math.max(5, 100 - (i * 2.3));
+                bar.style.height = height + '%';
+                tail.appendChild(bar);
+            }
+        }
+
+        // Update reverb tail visualization
+        function updateReverbTail() {
+            const bars = document.querySelectorAll('.tail-bar');
+            const reductionFactor = currentReduction / 100;
+            bars.forEach((bar, i) => {
+                const baseHeight = Math.max(5, 100 - (i * 2.3));
+                const reducedHeight = baseHeight * (1 - reductionFactor);
+                bar.style.height = Math.max(5, reducedHeight) + '%';
+            });
+        }
+
+        // File input handler
+        fileInput.addEventListener('change', async function() {
+            const file = this.files[0];
+            if (file) {
+                if (!file.type.startsWith('audio/')) {
+                    statusText.innerText = "ERROR: INVALID FILE TYPE";
+                    setTimeout(() => statusText.innerText = "SYSTEM READY", 3000);
+                    return;
+                }
+                if (file.size > MAX_FILE_SIZE) {
+                    statusText.innerText = "ERROR: FILE TOO LARGE";
+                    setTimeout(() => statusText.innerText = "SYSTEM READY", 3000);
+                    return;
+                }
+                
+                try {
+                    currentFileArrayBuffer = await file.arrayBuffer();
+                    
+                    if (currentBlobUrl) {
+                        URL.revokeObjectURL(currentBlobUrl);
+                    }
+                    
+                    currentBlobUrl = URL.createObjectURL(file);
+                    audioElement.src = currentBlobUrl;
+                    statusText.innerText = "AUDIO LOADED";
+                    if(isPlaying) togglePlay();
+                } catch (error) {
+                    console.error('File loading error:', error);
+                    statusText.innerText = "ERROR: FILE LOAD FAILED";
+                    setTimeout(() => statusText.innerText = "SYSTEM READY", 3000);
+                }
+            }
+        });
+
+        // Initialize audio context
+        function initAudio() {
+            if (audioCtx) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+
+            sourceNode = audioCtx.createMediaElementSource(audioElement);
+            inputGainNode = audioCtx.createGain();
+            outputGainNode = audioCtx.createGain();
+            analyserNode = audioCtx.createAnalyser();
+            analyserNode.fftSize = 256;
+            analyserNode.smoothingTimeConstant = 0.85;
+
+            // Create a simple high-pass filter to simulate reverb removal
+            // (Note: Real reverb removal would require advanced spectral processing)
+            const highpass = audioCtx.createBiquadFilter();
+            highpass.type = 'highpass';
+            highpass.frequency.value = 100;
+
+            // Connect nodes
+            sourceNode.connect(inputGainNode);
+            inputGainNode.connect(highpass);
+            highpass.connect(outputGainNode);
+            outputGainNode.connect(analyserNode);
+            outputGainNode.connect(audioCtx.destination);
+            
+            updateAudioParams();
+        }
+
+        // Toggle play/pause
+        async function togglePlay() {
+            if (!audioElement.src) { 
+                statusText.innerText = "LOAD AUDIO FIRST";
+                setTimeout(() => statusText.innerText = "SYSTEM READY", 2000);
+                return; 
+            }
+            if (!audioCtx) initAudio();
+            if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+            if (isPlaying) {
+                audioElement.pause();
+                playBtn.innerText = "ENGAGE";
+                playBtn.classList.remove('active-state');
+                statusText.innerText = "PAUSED";
+            } else {
+                audioElement.play();
+                playBtn.innerText = "DISENGAGE";
+                playBtn.classList.add('active-state');
+                statusText.innerText = "DE-GLOSSING...";
+            }
+            isPlaying = !isPlaying;
+        }
+
+        // Update audio parameters
+        function updateAudioParams() {
+            updateReverbTail();
+            
+            if (!audioCtx) return;
+
+            // Output gain
+            const mainVal = currentMainKnobVal;
+            const gain = (mainVal / 50) * (mainVal / 50);
+            outputGainNode.gain.setTargetAtTime(gain, audioCtx.currentTime, 0.015);
+        }
+
+        // Helper function to update knob display
+        function updateKnobDisplay(knobId, value, min, max, displayText) {
+            const knob = document.getElementById(knobId);
+            const normalized = (value - min) / (max - min);
+            const rotation = (normalized - 0.5) * 270;
+            knob.style.transform = `rotate(${rotation}deg)`;
+            
+            if (knobId === 'reductionKnob') {
+                document.getElementById('reductionValue').innerText = displayText;
+            } else if (knobId === 'decayKnob') {
+                document.getElementById('decayValue').innerText = displayText;
+            }
+        }
+
+        // Setup knob interactions
+        function setupKnob(elementId, minVal, maxVal, defaultVal, updateFunc) {
+            const knob = document.getElementById(elementId);
+            let isDragging = false;
+            let startY;
+            let startVal;
+            
+            knob.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startY = e.clientY;
+                if (elementId === 'reductionKnob') {
+                    startVal = currentReduction;
+                } else if (elementId === 'decayKnob') {
+                    startVal = currentDecay;
+                } else if (elementId === 'mainKnob') {
+                    startVal = currentMainKnobVal;
+                }
+                document.body.style.cursor = 'ns-resize';
+                e.preventDefault();
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    document.body.style.cursor = 'default';
+                }
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const deltaY = startY - e.clientY;
+                const sensitivity = (maxVal - minVal) / 200;
+                let newVal = startVal + (deltaY * sensitivity);
+                newVal = Math.max(minVal, Math.min(maxVal, newVal));
+                
+                updateFunc(newVal);
+            });
+        }
+
+        // Update reduction knob
+        function updateReductionKnob(value) {
+            currentReduction = value;
+            const displayText = Math.round(value) + '%';
+            updateKnobDisplay('reductionKnob', value, 0, 100, displayText);
+            updateAudioParams();
+        }
+
+        // Update decay knob
+        function updateDecayKnob(value) {
+            currentDecay = value;
+            const seconds = (value / 100 * 2).toFixed(1);
+            const displayText = seconds + 's';
+            updateKnobDisplay('decayKnob', value, 0, 100, displayText);
+            updateAudioParams();
+        }
+
+        // Update main output knob
+        function updateMainKnob(value) {
+            currentMainKnobVal = value;
+            const knob = document.getElementById('mainKnob');
+            knob.style.transform = `rotate(${(value - 50) * 2.7}deg)`;
+            document.getElementById('outputValue').innerText = Math.round(value) + '%';
+            updateAudioParams();
+        }
+
+        // Initialize knobs
+        setupKnob('reductionKnob', 0, 100, 50, updateReductionKnob);
+        setupKnob('decayKnob', 0, 100, 50, updateDecayKnob);
+        setupKnob('mainKnob', 0, 100, 50, updateMainKnob);
+
+        // Select reverb type
+        function selectType(type, btn) {
+            document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentReverbType = type;
+            statusText.innerText = `TYPE: ${type.toUpperCase()}`;
+            setTimeout(() => {
+                statusText.innerText = isPlaying ? "DE-GLOSSING..." : "SYSTEM READY";
+            }, 2000);
+        }
+
+        // Apply preset
+        function applyPreset(preset, btn) {
+            document.querySelectorAll('.preset-btn').forEach(b => {
+                b.classList.remove('active');
+            });
+            if (btn) btn.classList.add('active');
+            
+            currentPreset = preset;
+            
+            switch(preset) {
+                case 'gentle':
+                    currentReduction = 25;
+                    currentDecay = 40;
+                    break;
+                case 'moderate':
+                    currentReduction = 50;
+                    currentDecay = 50;
+                    break;
+                case 'aggressive':
+                    currentReduction = 75;
+                    currentDecay = 60;
+                    break;
+                case 'surgical':
+                    currentReduction = 95;
+                    currentDecay = 70;
+                    break;
+            }
+            
+            updateKnobDisplay('reductionKnob', currentReduction, 0, 100, currentReduction + '%');
+            const seconds = (currentDecay / 100 * 2).toFixed(1);
+            updateKnobDisplay('decayKnob', currentDecay, 0, 100, seconds + 's');
+            updateAudioParams();
+        }
+
+        // Download processed audio
+        async function downloadProcessedAudio() {
+            if(!currentFileArrayBuffer) { 
+                statusText.innerText = "LOAD AUDIO FIRST";
+                setTimeout(() => statusText.innerText = "SYSTEM READY", 2000);
+                return; 
+            }
+            if(!audioCtx) initAudio();
+
+            const prevStatus = statusText.innerText;
+            statusText.innerText = "RENDERING...";
+            
+            try {
+                const audioBuffer = await audioCtx.decodeAudioData(currentFileArrayBuffer.slice(0));
+                
+                const offlineCtx = new OfflineAudioContext(
+                    audioBuffer.numberOfChannels, 
+                    audioBuffer.length, 
+                    audioBuffer.sampleRate
+                );
+                
+                const source = offlineCtx.createBufferSource();
+                source.buffer = audioBuffer;
+                
+                const oOutputGain = offlineCtx.createGain();
+                const mainVal = currentMainKnobVal;
+                oOutputGain.gain.value = (mainVal / 50) * (mainVal / 50);
+                
+                source.connect(oOutputGain);
+                oOutputGain.connect(offlineCtx.destination);
+                
+                source.start(0);
+                const renderedBuffer = await offlineCtx.startRendering();
+                
+                const wavBlob = bufferToWave(renderedBuffer, renderedBuffer.length);
+                const url = URL.createObjectURL(wavBlob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = "reverb_de_gloss_output.wav";
+                document.body.appendChild(a);
+                a.click();
+                
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                statusText.innerText = "EXPORT COMPLETE";
+                setTimeout(() => { statusText.innerText = prevStatus; }, 3000);
+            } catch (e) {
+                console.error('Render error:', e);
+                statusText.innerText = "ERROR: RENDER FAILED";
+                setTimeout(() => { statusText.innerText = prevStatus; }, 4000);
+            }
+        }
+
+        // Convert buffer to WAV
+        function bufferToWave(abuffer, len) {
+            let numOfChan = abuffer.numberOfChannels;
+            let length = len * numOfChan * 2 + 44;
+            let buffer = new ArrayBuffer(length);
+            let view = new DataView(buffer);
+            let channels = [];
+            let offset = 0;
+            
+            function setUint16(data) { 
+                view.setUint16(offset, data, true); 
+                offset += 2; 
+            }
+            function setUint32(data) { 
+                view.setUint32(offset, data, true); 
+                offset += 4; 
+            }
+            
+            setUint32(0x46464952); // "RIFF"
+            setUint32(length - 8);
+            setUint32(0x45564157); // "WAVE"
+            setUint32(0x20746d66); // "fmt "
+            setUint32(16);
+            setUint16(1);
+            setUint16(numOfChan);
+            setUint32(abuffer.sampleRate);
+            setUint32(abuffer.sampleRate * 2 * numOfChan);
+            setUint16(numOfChan * 2);
+            setUint16(16);
+            setUint32(0x61746164); // "data"
+            setUint32(length - offset - 4);
+            
+            for(let i = 0; i < abuffer.numberOfChannels; i++) {
+                channels.push(abuffer.getChannelData(i));
+            }
+            
+            for (let i = 0; i < len; i++) {
+                for (let ch = 0; ch < numOfChan; ch++) {
+                    let s = Math.max(-1, Math.min(1, channels[ch][i]));
+                    s = (s < 0 ? s * 0x8000 : s * 0x7FFF);
+                    view.setInt16(offset, s, true);
+                    offset += 2;
+                }
+            }
+            
+            return new Blob([buffer], { type: "audio/wav" });
+        }
+
+        // Initialize
+        initReverbTail();
+        updateReverbTail();
+    </script>
+</body>
+</html>

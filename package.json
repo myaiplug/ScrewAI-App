@@ -1,0 +1,59 @@
+{
+  "name": "screwai-pro",
+  "version": "1.0.0",
+  "description": "Premium Audio Processing Suite",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "prepare:installer": "node scripts/prepare-installer-resources.js",
+    "build": "npm run prepare:installer && electron-builder --win portable",
+    "build:exe": "npm run prepare:installer && electron-builder --win nsis"
+  },
+  "author": "ScrewAI",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.screwai.pro",
+    "productName": "ScrewAI Pro",
+    "artifactName": "${productName}-Setup-${version}.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "screwai.ico"
+    },
+    "files": [
+      "**/*",
+      "!*.bat"
+    ],
+    "extraResources": [
+      {
+        "from": "../",
+        "to": "strains",
+        "filter": ["*.bat"]
+      },
+      {
+        "from": "build-resources/ffmpeg",
+        "to": "ffmpeg",
+        "filter": ["*.exe"]
+      }
+    ],
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ScrewAI Pro",
+      "artifactName": "${productName}-Installer-${version}.${ext}"
+    },
+    "directories": {
+      "output": "dist"
+    }
+  }
+}

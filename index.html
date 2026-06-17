@@ -1,0 +1,2081 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScrewAI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Sora:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-0: #120718;
+      --bg-1: #2a1037;
+      --panel: rgba(40, 19, 54, 0.74);
+      --panel-strong: rgba(28, 12, 39, 0.92);
+      --line: rgba(220, 185, 255, 0.2);
+      --line-strong: rgba(220, 185, 255, 0.36);
+      --txt-strong: #f4f8fb;
+      --txt: rgba(244, 248, 251, 0.78);
+      --muted: rgba(225, 199, 246, 0.62);
+      --teal: #b58cff;
+      --amber: #d780ff;
+      --coral: #8f63ff;
+      --lime: #d3afff;
+      --danger: #ef5757;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --radius-sm: 10px;
+    }
+
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      color: var(--txt-strong);
+      background: radial-gradient(circle at 88% -12%, rgba(190, 124, 255, 0.36), transparent 42%),
+        radial-gradient(circle at 12% 102%, rgba(124, 75, 194, 0.44), transparent 46%),
+        linear-gradient(170deg, var(--bg-0), var(--bg-1));
+      height: 100vh;
+      overflow: hidden;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    #particles-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.9;
+    }
+
+    .syrup-lamp {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.92;
+    }
+
+    .syrup-lamp::before {
+      content: '';
+      position: absolute;
+      inset: -8% -6% 18%;
+      background:
+        radial-gradient(circle at 18% 26%, rgba(196, 104, 255, 0.22), transparent 26%),
+        radial-gradient(circle at 78% 22%, rgba(119, 63, 221, 0.24), transparent 24%),
+        radial-gradient(circle at 48% 78%, rgba(109, 49, 194, 0.28), transparent 34%),
+        linear-gradient(180deg, rgba(52, 19, 71, 0.08), rgba(82, 24, 121, 0.14) 40%, rgba(60, 18, 92, 0.2) 100%);
+      filter: blur(42px) saturate(120%);
+      transform: scale(1.08);
+    }
+
+    .syrup-lamp::after {
+      content: '';
+      position: absolute;
+      left: -10%;
+      right: -10%;
+      bottom: -8%;
+      height: 36%;
+      background: radial-gradient(ellipse at 50% 90%, rgba(84, 20, 131, 0.3), rgba(84, 20, 131, 0.18) 38%, transparent 72%);
+      filter: blur(34px);
+      animation: syrupCurrent 22s ease-in-out infinite;
+    }
+
+    .syrup-blob,
+    .syrup-bubble {
+      position: absolute;
+      border-radius: 999px;
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+
+    .syrup-blob {
+      left: var(--x, 50%);
+      top: var(--y, 50%);
+      width: var(--size, 240px);
+      height: calc(var(--size, 240px) * 0.72);
+      background: radial-gradient(circle at 35% 30%, rgba(239, 187, 255, 0.24), rgba(176, 77, 255, 0.22) 32%, rgba(91, 22, 146, 0.16) 62%, rgba(91, 22, 146, 0) 78%);
+      filter: blur(30px);
+      opacity: 0.5;
+      animation: syrupBlobFloat var(--duration, 20s) ease-in-out infinite;
+      animation-delay: var(--delay, 0s);
+      transform: translate3d(-50%, -50%, 0);
+    }
+
+    .syrup-bubble {
+      left: var(--x, 50%);
+      bottom: -14%;
+      width: var(--size, 34px);
+      height: var(--size, 34px);
+      background:
+        radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.1) 18%, transparent 20%),
+        radial-gradient(circle at 50% 55%, rgba(230, 151, 255, 0.28), rgba(146, 58, 231, 0.18) 60%, rgba(95, 25, 152, 0.06) 100%);
+      border: 1px solid rgba(255, 235, 255, 0.1);
+      box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.08), 0 0 22px rgba(174, 84, 255, 0.14);
+      opacity: 0;
+      animation: bubbleRise var(--duration, 18s) linear infinite;
+      animation-delay: var(--delay, 0s);
+      transform: translateX(-50%);
+    }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.06) 0.5px, transparent 0.5px);
+      background-size: 4px 4px;
+      opacity: 0.08;
+      mix-blend-mode: screen;
+    }
+
+    .shape {
+      position: fixed;
+      border-radius: 999px;
+      pointer-events: none;
+      filter: blur(90px);
+      z-index: 1;
+      animation: drift 20s ease-in-out infinite;
+    }
+
+    .shape.a {
+      width: 420px;
+      height: 420px;
+      top: -110px;
+      right: -120px;
+      background: rgba(179, 119, 255, 0.34);
+    }
+
+    .shape.b {
+      width: 340px;
+      height: 340px;
+      bottom: -140px;
+      left: -120px;
+      background: rgba(126, 85, 209, 0.34);
+      animation-delay: -8s;
+    }
+
+    .top-right-art {
+      position: fixed;
+      top: 80px;
+      right: -28px;
+      width: min(34vw, 420px);
+      height: min(54vh, 510px);
+      background: url('../screw_hero.png') no-repeat top right / contain;
+      opacity: 0.22;
+      pointer-events: none;
+      z-index: 1;
+      filter: drop-shadow(0 14px 34px rgba(0,0,0,0.35));
+      mix-blend-mode: screen;
+    }
+
+    .titlebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      border-bottom: 1px solid rgba(223, 194, 255, 0.16);
+      background: rgba(20, 9, 29, 0.78);
+      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(16px);
+      -webkit-app-region: drag;
+      z-index: 1000;
+    }
+
+    .titlebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .titlebar-cassette-icon {
+      height: 24px;
+      width: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
+      pointer-events: none;
+    }
+
+    .titlebar-logo-image {
+      height: 24px;
+      width: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.45));
+      pointer-events: none;
+    }
+
+    .hero-logo-stack {
+      position: relative;
+      width: clamp(380px, 44vw, 630px);
+      margin: 0 auto;
+      display: grid;
+      place-items: center;
+      isolation: isolate;
+      pointer-events: none;
+    }
+
+    .hero-logo-stack::before {
+      content: '';
+      position: absolute;
+      width: 78%;
+      height: 68%;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(183, 117, 255, 0.34) 0%, rgba(130, 92, 226, 0.28) 46%, rgba(0, 0, 0, 0) 80%);
+      filter: blur(48px);
+      z-index: 0;
+      animation: syrupBloom 10s ease-in-out infinite;
+    }
+
+    .hero-logo-stack::after {
+      content: '';
+      position: absolute;
+      width: 92%;
+      height: 82%;
+      border-radius: 50%;
+      background: conic-gradient(from 110deg, rgba(183, 117, 255, 0.2), rgba(125, 104, 252, 0.16), rgba(231, 158, 255, 0.16), rgba(183, 117, 255, 0.2));
+      filter: blur(28px);
+      opacity: 0.58;
+      z-index: 1;
+      animation: syrupBloom 13s ease-in-out infinite reverse;
+    }
+
+    .hero-logo {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin: 0 auto;
+      padding-left: 0;
+      position: relative;
+      z-index: 3;
+    }
+
+    .hero-logo-main {
+      filter: drop-shadow(0 0 18px rgba(179, 121, 255, 0.44)) drop-shadow(0 0 34px rgba(128, 102, 255, 0.28)) drop-shadow(0 20px 36px rgba(0, 0, 0, 0.42));
+    }
+
+    .hero-logo-clone {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: auto;
+      z-index: 2;
+      opacity: 0.24;
+      mix-blend-mode: screen;
+      pointer-events: none;
+      animation: rgbGlide 8.5s ease-in-out infinite;
+    }
+
+    .hero-logo-clone.r {
+      filter: drop-shadow(0 0 8px rgba(216, 125, 255, 0.74));
+      transform: translate3d(2px, 0, 0);
+    }
+
+    .hero-logo-clone.b {
+      filter: drop-shadow(0 0 8px rgba(132, 111, 255, 0.72));
+      transform: translate3d(-2px, 0, 0);
+      animation-delay: -3.9s;
+    }
+
+    .hero-logo-scan {
+      display: none;
+    }
+
+    .hero-subtitle {
+      margin-top: 3px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .titlebar-title {
+      font-size: 13px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--txt);
+      font-weight: 600;
+    }
+
+    .titlebar-controls {
+      display: flex;
+      -webkit-app-region: no-drag;
+    }
+
+    .titlebar-btn {
+      width: 38px;
+      height: 42px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      transition: background 0.2s ease, color 0.2s ease;
+      cursor: pointer;
+    }
+
+    .titlebar-btn:hover {
+      color: var(--txt-strong);
+      background: rgba(255, 255, 255, 0.07);
+    }
+
+    .titlebar-btn.close:hover {
+      color: #fff;
+      background: var(--danger);
+    }
+
+    .titlebar-btn svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    .app-shell {
+      position: relative;
+      z-index: 20;
+      height: calc(100vh - 42px);
+      margin-top: 42px;
+      padding: 2px 28px 24px;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 0;
+      overflow: hidden;
+    }
+
+    .quick-guide {
+        justify-self: center;
+        width: min(92vw, 760px);
+        max-width: 760px;
+        margin: 0 auto;
+        text-align: center;
+      color: rgba(232, 242, 248, 0.92);
+      padding-top: 0;
+        transform: translateY(24px);
+        margin-bottom: -14px;
+        line-height: 1.12;
+    }
+
+    .quick-guide-title {
+      display: block;
+      font-family: 'Sora', sans-serif;
+        font-size: 14px;
+      font-weight: 800;
+        letter-spacing: 0.11em;
+      text-transform: uppercase;
+      color: rgba(244, 248, 251, 0.98);
+      text-shadow: 0 2px 16px rgba(176, 122, 255, 0.28), 0 4px 20px rgba(0, 0, 0, 0.5);
+      margin-bottom: 2px;
+      background: linear-gradient(135deg, rgba(244, 248, 251, 0.98), rgba(176, 122, 255, 0.88));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .quick-guide-steps {
+      list-style: none;
+      margin: 0 auto;
+      padding: 0;
+      display: grid;
+      gap: 1px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      line-height: 1.1;
+      letter-spacing: 0.02em;
+      text-transform: none;
+      color: rgba(210, 227, 238, 0.9);
+      font-weight: 500;
+      text-align: center;
+    }
+
+    .quick-guide-steps li::before {
+      content: '- ';
+      color: rgba(214, 176, 255, 0.95);
+      font-weight: 700;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr;
+      justify-items: center;
+      margin-top: 0;
+      animation: rise 0.8s ease both;
+    }
+
+    .hero-left {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    .kicker {
+      font-family: 'IBM Plex Mono', monospace;
+      color: var(--teal);
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .hero h1 { display: none; }
+
+    .hero h1 span {
+      color: var(--amber);
+    }
+
+    .hero p { display: none; }
+
+    .hero-stats {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      width: 100%;
+      margin-top: -8px;
+    }
+
+    .hero-naming-line {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .hero-naming-line .stat {
+      color: var(--txt-strong);
+      font-weight: 700;
+      margin-right: 4px;
+    }
+
+    .hero-count-note {
+      margin-top: 2px;
+      text-align: center;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: rgba(228, 203, 247, 0.72);
+    }
+
+    .layout {
+      min-height: 0;
+      height: 100%;
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      gap: 18px;
+      margin-top: -18px;
+      animation: rise 1s ease 0.12s both;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--panel);
+      -webkit-backdrop-filter: blur(26px) saturate(120%);
+      backdrop-filter: blur(26px) saturate(120%);
+      box-shadow: var(--shadow);
+    }
+
+    .sidebar {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-height: 0;
+      height: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .card {
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(184, 210, 228, 0.16);
+      background: linear-gradient(180deg, rgba(12, 21, 28, 0.82), rgba(9, 15, 21, 0.82));
+      padding: 14px;
+    }
+
+    .card-title {
+      font-family: 'IBM Plex Mono', monospace;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.13em;
+      font-size: 10px;
+      margin-bottom: 10px;
+    }
+
+    .audio-drop {
+      border: 1px dashed rgba(184, 210, 228, 0.24);
+      border-radius: var(--radius-sm);
+      padding: 18px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s ease, background 0.25s ease, transform 0.25s ease;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .audio-drop:hover,
+    .audio-drop.drag-over {
+      border-color: rgba(176, 122, 255, 0.82);
+      background: rgba(176, 122, 255, 0.11);
+      transform: translateY(-1px);
+    }
+
+    .audio-drop.has-file {
+      border-style: solid;
+      border-color: rgba(214, 176, 255, 0.74);
+      background: rgba(214, 176, 255, 0.12);
+    }
+
+    .audio-drop-icon {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 9px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(145deg, var(--teal), #7a54cc);
+      color: #07242b;
+      box-shadow: 0 8px 20px rgba(5, 12, 15, 0.45);
+    }
+
+    .audio-drop-icon svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .audio-drop-text {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--txt-strong);
+    }
+
+    .audio-drop-hint {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .audio-file-name {
+      margin-top: 9px;
+      color: var(--lime);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      word-break: break-all;
+    }
+
+    .output-btn {
+      width: 100%;
+      border: 1px solid rgba(184, 210, 228, 0.22);
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--txt);
+      font-weight: 600;
+      font-size: 12px;
+      padding: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s ease;
+    }
+
+    .output-btn:hover {
+      background: rgba(176, 122, 255, 0.11);
+      border-color: rgba(176, 122, 255, 0.78);
+      color: var(--txt-strong);
+    }
+
+    .output-btn.has-folder {
+      border-color: rgba(214, 176, 255, 0.8);
+      color: var(--lime);
+    }
+
+    .output-btn svg {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+
+    .output-path {
+      margin-top: 8px;
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      word-break: break-all;
+    }
+
+    .settings-card {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .settings-status {
+      border: 1px solid rgba(184, 210, 228, 0.14);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .settings-status-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+
+    .settings-status-value {
+      font-family: 'Sora', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--txt-strong);
+    }
+
+    .settings-note {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .setting-toggle {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      border: 1px solid rgba(184, 210, 228, 0.14);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.03);
+      padding: 10px 12px;
+    }
+
+    .setting-toggle input {
+      margin: 2px 0 0;
+      accent-color: var(--teal);
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+    }
+
+    .setting-toggle-text {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .setting-toggle-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--txt-strong);
+    }
+
+    .setting-toggle-sub {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .process-section {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .process-btn {
+      border: 0;
+      border-radius: 12px;
+      width: 100%;
+      padding: 14px;
+      color: #061117;
+      font-family: 'Sora', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--amber), var(--teal));
+      transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+      box-shadow: 0 10px 26px rgba(15, 15, 15, 0.45);
+    }
+
+    .process-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.52);
+    }
+
+    .process-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .progress-section,
+    .results-section {
+      display: none;
+      border-radius: 12px;
+      border: 1px solid rgba(184, 210, 228, 0.2);
+      background: rgba(8, 13, 18, 0.7);
+      padding: 10px;
+    }
+
+    .progress-section.active,
+    .results-section.active {
+      display: block;
+      animation: rise 0.28s ease both;
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 11px;
+      color: var(--txt);
+    }
+
+    .progress-count {
+      color: var(--teal);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .progress-bar {
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(200, 220, 232, 0.12);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--teal), var(--amber));
+      transition: width 0.25s ease;
+    }
+
+    .current-strain {
+      margin-top: 8px;
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+    }
+
+    .results-section {
+      border-color: rgba(214, 176, 255, 0.34);
+      background: rgba(214, 176, 255, 0.1);
+    }
+
+    .results-title {
+      font-size: 12px;
+      color: var(--lime);
+      font-weight: 700;
+      margin-bottom: 6px;
+      font-family: 'Sora', sans-serif;
+    }
+
+    .results-list {
+      color: var(--txt);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      min-height: 0;
+      overflow: hidden;
+      background: radial-gradient(circle at 90% 8%, rgba(176, 122, 255, 0.14), transparent 38%),
+        radial-gradient(circle at 10% 95%, rgba(165, 109, 248, 0.14), transparent 40%);
+    }
+
+    .workspace-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(184, 210, 228, 0.16);
+      background: rgba(7, 12, 17, 0.44);
+    }
+
+    .workspace-title {
+      font-family: 'Sora', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--txt-strong);
+    }
+
+    .workspace-sub {
+      font-family: 'IBM Plex Mono', monospace;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    /* Format dropdown */
+    .format-select-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .format-select-wrap::after {
+      content: '▾';
+      position: absolute;
+      right: 11px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 10px;
+      color: var(--teal);
+      pointer-events: none;
+    }
+
+    .format-select {
+      -webkit-appearance: none;
+      appearance: none;
+      border: 1px solid rgba(176, 122, 255, 0.54);
+      background: rgba(176, 122, 255, 0.09);
+      color: var(--teal);
+      border-radius: 999px;
+      padding: 7px 30px 7px 13px;
+      font-size: 11px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+      outline: none;
+    }
+
+    .format-select:hover,
+    .format-select:focus {
+      border-color: var(--teal);
+      background: rgba(176, 122, 255, 0.16);
+      box-shadow: 0 0 0 3px rgba(176, 122, 255, 0.16);
+    }
+
+    .format-select option {
+      background: #0f171f;
+      color: var(--txt-strong);
+    }
+
+    /* Process-all button in toolbar */
+    .process-all-btn {
+      border: 1px solid rgba(190, 133, 255, 0.42);
+      background: rgba(190, 133, 255, 0.1);
+      color: var(--amber);
+      border-radius: 999px;
+      padding: 7px 14px;
+      font-size: 11px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .process-all-btn:hover:not(:disabled) {
+      background: rgba(190, 133, 255, 0.2);
+      border-color: var(--amber);
+      box-shadow: 0 0 0 3px rgba(190, 133, 255, 0.16);
+    }
+
+    .process-all-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .workspace-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 18px 8px;
+      color: var(--muted);
+    }
+
+    .strains-count {
+      font-size: 11px;
+      font-family: 'IBM Plex Mono', monospace;
+      border: 1px solid rgba(184, 210, 228, 0.2);
+      border-radius: 999px;
+      padding: 5px 10px;
+      color: var(--teal);
+      background: rgba(176, 122, 255, 0.1);
+    }
+
+    .select-all-btn {
+      border: 0;
+      background: transparent;
+      color: var(--txt);
+      font-size: 11px;
+      font-family: 'IBM Plex Mono', monospace;
+      cursor: pointer;
+      opacity: 0.82;
+      transition: opacity 0.2s ease, color 0.2s ease;
+    }
+
+    .select-all-btn:hover {
+      opacity: 1;
+      color: var(--amber);
+    }
+
+    /* ── Channel strip rack ── */
+    /* ── Syrup vial shelf ── */
+    .strain-rack {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-end;
+      gap: 6px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      height: 100%;
+      padding: 20px 18px 22px;
+      /* Lab shelf: slight gradient floor */
+      background:
+        linear-gradient(to bottom,
+          transparent 85%,
+          rgba(0,0,0,0.55) 100%
+        );
+      /* Shelf rail at bottom */
+      box-shadow: inset 0 -2px 0 rgba(184,210,228,0.08);
+    }
+
+    .strain-rack::-webkit-scrollbar { height: 5px; }
+    .strain-rack::-webkit-scrollbar-thumb {
+      background: rgba(184, 210, 228, 0.15);
+      border-radius: 999px;
+    }
+
+    /* ── PRO locked strain ── */
+    .strain-strip.pro-locked {
+      opacity: 0.48;
+      filter: saturate(0.3) brightness(0.7);
+      cursor: not-allowed;
+    }
+
+    .strain-strip.pro-locked::before {
+      opacity: 0.55 !important;
+    }
+
+    .strain-strip.pro-locked:hover {
+      flex-basis: 88px;
+      min-width: 88px;
+      height: 94%;
+      transform: translateY(-1px);
+      border-color: rgba(255,255,255,0.18);
+      box-shadow:
+        inset 2px 0 5px rgba(255,255,255,0.04),
+        inset -1px 0 3px rgba(255,255,255,0.02),
+        0 8px 24px rgba(0,0,0,0.55);
+      opacity: 0.58;
+      filter: saturate(0.4) brightness(0.75);
+    }
+
+    .strain-rack.view-grid .strain-strip.pro-locked:hover {
+      flex-basis: unset;
+      min-width: unset;
+      height: 194px;
+      transform: translateY(-2px);
+    }
+
+    .strain-strip.pro-locked.selected {
+      opacity: 0.48;
+      filter: saturate(0.3) brightness(0.7);
+      border-color: rgba(255,255,255,0.18);
+      box-shadow:
+        inset 2px 0 5px rgba(255,255,255,0.04),
+        inset -1px 0 3px rgba(255,255,255,0.02),
+        0 8px 24px rgba(0,0,0,0.55);
+    }
+
+    .strain-strip.pro-locked .strip-light {
+      opacity: 0.08 !important;
+      box-shadow: none !important;
+    }
+
+    .strain-strip.pro-locked .strip-icon {
+      opacity: 0 !important;
+    }
+
+    .pro-lock-badge {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.22s ease;
+    }
+
+    .strain-strip.pro-locked:hover .pro-lock-badge,
+    .strain-rack.view-grid .strain-strip.pro-locked .pro-lock-badge {
+      opacity: 1;
+    }
+
+    .pro-lock-icon {
+      width: 22px;
+      height: 22px;
+      color: rgba(255,255,255,0.85);
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6));
+    }
+
+    .pro-lock-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 6.5px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.92);
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+      white-space: nowrap;
+    }
+
+    .strain-rack.view-grid .pro-lock-icon {
+      width: 28px;
+      height: 28px;
+    }
+
+    .strain-rack.view-grid .pro-lock-label {
+      font-size: 8px;
+    }
+
+    .strain-rack.view-grid .pro-lock-badge {
+      opacity: 1;
+    }
+
+    /* ── PRO badge pill ── */
+    .pro-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(176,122,255,0.18), rgba(239,87,87,0.18));
+      border: 1px solid rgba(176,122,255,0.42);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--amber);
+      white-space: nowrap;
+    }
+
+    .pro-badge svg {
+      width: 11px;
+      height: 11px;
+    }
+
+    .pro-count-note {
+      margin-top: 1px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 8px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: rgba(228, 203, 247, 0.56);
+    }
+
+    /* ── Glass vial container ── */
+    .strain-strip {
+      flex: 0 0 30px;
+      min-width: 30px;
+      height: 88%;
+      /* Pharmaceutical measuring-vial tick marks */
+      background:
+        repeating-linear-gradient(
+          to bottom,
+          transparent 0px, transparent 17px,
+          rgba(255,255,255,0.055) 17px, rgba(255,255,255,0.055) 18px
+        ),
+        linear-gradient(180deg,
+          rgba(16,26,36,0.92) 0%,
+          rgba(6,10,14,0.96) 100%
+        );
+      border: 1px solid rgba(255,255,255,0.18);
+      /* Left/right glass-edge catch-lights */
+      box-shadow:
+        inset 2px 0 5px rgba(255,255,255,0.05),
+        inset -1px 0 3px rgba(255,255,255,0.03),
+        0 8px 24px rgba(0,0,0,0.55);
+      border-radius: 6px 6px 10px 10px;
+      cursor: pointer;
+      position: relative;
+      overflow: visible;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 0 10px;
+      gap: 6px;
+      transition:
+        flex-basis 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        min-width  0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        height     0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        transform 0.28s ease,
+        border-color 0.22s ease,
+        box-shadow 0.22s ease;
+      animation: vialDrop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation-delay: calc(var(--strip-order, 0) * 0.028s);
+    }
+
+    .strip-cap {
+      position: absolute;
+      top: -14px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 76%;
+      height: 18px;
+      border-radius: 8px 8px 4px 4px;
+      background:
+        linear-gradient(180deg,
+          rgba(255,255,255,0.98) 0%,
+          rgba(248,248,248,0.98) 24%,
+          rgba(232,232,232,0.98) 100%
+        );
+      border: 1px solid rgba(32,32,32,0.28);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.85),
+        0 7px 13px rgba(0,0,0,0.3);
+      z-index: 6;
+      pointer-events: none;
+    }
+
+    .strip-cap-ridges {
+      position: absolute;
+      inset: 4px 3px 2px;
+      border-radius: inherit;
+      background: repeating-linear-gradient(
+        to right,
+        rgba(20,20,20,0.82) 0px,
+        rgba(20,20,20,0.82) 1px,
+        rgba(102,102,102,0.6) 1px,
+        rgba(102,102,102,0.6) 3px,
+        rgba(220,220,220,0.42) 3px,
+        rgba(220,220,220,0.42) 5px
+      );
+      opacity: 0.88;
+    }
+
+    .strip-label {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      transform: none;
+      width: 100%;
+      height: 74%;
+      max-height: none;
+      padding: 0;
+      border-radius: 0 0 8px 8px;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      z-index: 3;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .strip-label-img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center bottom;
+      border-radius: 0;
+    }
+
+    .strip-label-img-centered {
+      object-position: center 58%;
+    }
+
+    .strain-rack.view-grid .strip-label-img-centered {
+      object-position: center 54%;
+    }
+
+    .strip-label-img-ackt-left {
+      object-position: calc(50% - 10px) 58%;
+    }
+
+    .strain-rack.view-grid .strip-label-img-ackt-left {
+      object-position: calc(50% - 10px) 54%;
+    }
+
+    .strip-label-img-image-large {
+      transform: scale(1.38);
+      transform-origin: center 58%;
+    }
+
+    .strain-rack.view-grid .strip-label-img-image-large {
+      transform: scale(1.5);
+      transform-origin: center 60%;
+    }
+
+    .strip-label-band {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 5px;
+      background: linear-gradient(90deg, var(--strain-color, var(--teal)), rgba(255,255,255,0.55));
+      opacity: 0.95;
+    }
+
+    .strip-label-kicker,
+    .strip-label-meta {
+      position: relative;
+      z-index: 1;
+      font-family: 'IBM Plex Mono', monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(47, 32, 16, 0.78);
+      line-height: 1.1;
+    }
+
+    .strip-label-kicker {
+      font-size: 5.5px;
+      margin-top: 1px;
+    }
+
+    .strip-label-name {
+      position: relative;
+      z-index: 1;
+      margin-top: 3px;
+      font-family: 'Sora', sans-serif;
+      font-weight: 700;
+      font-size: 8px;
+      line-height: 1.05;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #2e2011;
+      word-break: break-word;
+    }
+
+    .strip-label-meta {
+      font-size: 5.5px;
+      margin-top: 3px;
+      opacity: 0.82;
+    }
+
+    .strip-measurements {
+      position: absolute;
+      top: 30px;
+      right: 5px;
+      bottom: 18px;
+      width: 20px;
+      z-index: 5;
+      pointer-events: none;
+      opacity: 0.76;
+    }
+
+    .strip-measure {
+      position: absolute;
+      right: 0;
+      width: 11px;
+      height: 1.5px;
+      background: rgba(245, 250, 255, 0.92);
+      border-radius: 999px;
+    }
+
+    .strip-measure:nth-child(1) { top: 8%; }
+    .strip-measure:nth-child(2) { top: 30%; }
+    .strip-measure:nth-child(3) { top: 52%; }
+    .strip-measure:nth-child(4) { top: 74%; }
+
+    .strip-measure::after {
+      content: attr(data-ml);
+      position: absolute;
+      right: 13px;
+      top: -5px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 6px;
+      color: rgba(244, 248, 251, 0.74);
+      letter-spacing: 0.03em;
+    }
+
+    /* ── Syrup fill ── */
+    .strain-strip::before {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: -3px; right: -3px;     /* slightly overhang so edges don't look clipped */
+      height: var(--fill-base, 48%);
+      /* Thick viscous syrup: gloss catch-light left, depth shadow bottom, rich base color */
+      background:
+        linear-gradient(to right,
+          rgba(255,255,255,0.38) 0%,
+          rgba(255,255,255,0.14) 18%,
+          transparent 42%,
+          transparent 72%,
+          rgba(0,0,0,0.12) 100%
+        ),
+        linear-gradient(to top,
+          rgba(0,0,0,0.5) 0%,
+          rgba(0,0,0,0.18) 22%,
+          transparent 55%
+        ),
+        var(--strain-color, var(--teal));
+      /* Asymmetric meniscus — concave top like a real liquid surface */
+      border-radius: 52% 48% 0 0 / 20px 14px 0 0;
+      z-index: 0;
+      transform-origin: 50% 100%;
+      animation: syrupBreathe calc(4.2s + var(--strip-order, 0) * 0.4s) ease-in-out infinite;
+      /* Viscous slow-rise transition */
+      transition: height 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* Syrup rises on hover */
+    .strain-strip:hover::before {
+      height: var(--fill-hover, 56%);
+      border-radius: 44% 56% 0 0 / 14px 22px 0 0;
+    }
+
+    /* Syrup rises to full 70% on selection */
+    .strain-strip.selected::before {
+      height: var(--fill-selected, 70%);
+      border-radius: 50% 50% 0 0 / 18px 18px 0 0;
+    }
+
+    /* ── Glass gloss overlay (sits above everything, pointer-events off) ── */
+    .strain-strip::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        /* Left glass edge — strong primary catch-light */
+        linear-gradient(to right,
+          rgba(255,255,255,0.2)  0%,
+          rgba(255,255,255,0.07) 5%,
+          transparent 18%,
+          transparent 78%,
+          rgba(255,255,255,0.04) 93%,
+          rgba(255,255,255,0.14) 100%
+        ),
+        /* Top rim highlight */
+        linear-gradient(to bottom,
+          rgba(255,255,255,0.15) 0%,
+          rgba(255,255,255,0.04) 6%,
+          transparent 16%
+        );
+      border-radius: inherit;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    /* Hover: expand vial, color border */
+    .strain-strip:hover {
+      flex-basis: 88px;
+      min-width: 88px;
+      height: 94%;
+      transform: translateY(-2px);
+      border-color: rgba(255,255,255,0.32);
+      box-shadow:
+        inset 2px 0 5px rgba(255,255,255,0.06),
+        inset -1px 0 3px rgba(255,255,255,0.04),
+        0 0 28px -4px var(--strain-color, var(--teal)),
+        0 12px 32px rgba(0,0,0,0.6);
+    }
+
+    /* Selected: syrup glow bleeds through the glass */
+    .strain-strip.selected {
+      border-color: rgba(255,255,255,0.35);
+      height: 100%;
+      transform: translateY(-2px);
+      box-shadow:
+        inset 2px 0 5px rgba(255,255,255,0.06),
+        inset -1px 0 3px rgba(255,255,255,0.03),
+        0 0 36px -2px var(--strain-color, var(--teal)),
+        0 0 14px -6px var(--strain-color, var(--teal)),
+        0 14px 36px rgba(0,0,0,0.65);
+    }
+
+    /* ── Vial contents — sit above the syrup ── */
+    .strip-light {
+      position: relative;
+      z-index: 1;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--strain-color, var(--teal));
+      opacity: 0.25;
+      flex-shrink: 0;
+      transition: opacity 0.22s ease, box-shadow 0.22s ease;
+    }
+
+    .strain-strip.selected .strip-light {
+      opacity: 1;
+      box-shadow: 0 0 7px var(--strain-color, var(--teal)), 0 0 16px var(--strain-color, var(--teal));
+    }
+
+    .strip-icon {
+      position: relative;
+      z-index: 1;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: linear-gradient(145deg, var(--strain-color, var(--teal)), rgba(0,0,0,0.55));
+      display: none;
+      place-items: center;
+      color: rgba(255,255,255,0.9);
+      flex-shrink: 0;
+      opacity: 0;
+      transition: opacity 0.28s ease, box-shadow 0.28s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.55);
+    }
+
+    .strain-strip:hover .strip-icon,
+    .strain-strip.selected .strip-icon {
+      opacity: 1;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 10px var(--strain-color, var(--teal));
+    }
+
+    .strip-icon svg { width: 15px; height: 15px; }
+
+    .strip-name {
+      position: absolute;
+      z-index: 10;
+      display: none;
+      left: 3px;
+      right: 3px;
+      top: 6px;
+      bottom: auto;
+      transform: none;
+      writing-mode: horizontal-tb;
+      font-family: 'Sora', sans-serif;
+      font-weight: 700;
+      font-size: 8px;
+      color: rgba(255,255,255,0.98);
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: none;
+      padding: 2px 4px;
+      border-radius: 6px;
+      background: rgba(2, 8, 13, 0.92);
+      border: 1px solid rgba(255,255,255,0.36);
+      -webkit-user-select: none;
+      user-select: none;
+      text-align: center;
+      pointer-events: none;
+      transition: color 0.22s ease, border-color 0.22s ease, background 0.22s ease;
+    }
+
+    .strain-strip.selected .strip-name {
+      color: #fff;
+      border-color: rgba(255,255,255,0.62);
+      background: rgba(7, 14, 20, 0.98);
+      text-shadow: 0 0 6px var(--strain-color, var(--teal)), 0 1px 2px rgba(0,0,0,0.9);
+    }
+
+    .strain-rack.view-grid .strip-name {
+      display: block;
+      top: 8px;
+      left: 8px;
+      right: 8px;
+      bottom: auto;
+      transform: none;
+      font-size: 9.5px;
+      padding: 3px 6px;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      border-radius: 8px;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .strip-format {
+      position: relative;
+      z-index: 1;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 8.5px;
+      color: rgba(222, 201, 246, 0.82);
+      text-transform: none;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+      max-width: 120px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .strip-check {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--strain-color, var(--teal));
+      display: grid;
+      place-items: center;
+      color: #021116;
+      transform: scale(0);
+      transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 5;
+    }
+
+    .strain-strip.selected .strip-check { transform: scale(1); }
+    .strip-check svg { width: 8px; height: 8px; }
+
+    /* ── Animations ── */
+    @keyframes vialDrop {
+      from { opacity: 0; transform: translateY(-18px) scaleY(0.82); }
+      to   { opacity: 1; transform: translateY(0)    scaleY(1); }
+    }
+
+    /* Syrup gently breathes — shifts the meniscus asymmetrically like a thick liquid */
+    @keyframes syrupBreathe {
+      0%   { border-radius: 52% 48% 0 0 / 20px 14px 0 0; transform: scaleX(1)    translateY(0); }
+      20%  { border-radius: 44% 56% 0 0 / 14px 22px 0 0; transform: scaleX(1.014) translateY(-1.5px); }
+      45%  { border-radius: 60% 40% 0 0 / 22px 12px 0 0; transform: scaleX(0.986) translateY(0.8px); }
+      70%  { border-radius: 46% 54% 0 0 / 16px 20px 0 0; transform: scaleX(1.01)  translateY(-0.5px); }
+      100% { border-radius: 52% 48% 0 0 / 20px 14px 0 0; transform: scaleX(1)    translateY(0); }
+    }
+
+    /* ── View toggle button ── */
+    .view-toggle-btn {
+      margin-left: auto;
+      border: 1px solid rgba(184, 210, 228, 0.22);
+      background: rgba(255,255,255,0.04);
+      color: var(--txt);
+      border-radius: 8px;
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+      flex-shrink: 0;
+    }
+    .view-toggle-btn:hover {
+      border-color: var(--teal);
+      color: var(--teal);
+      background: rgba(176,122,255,0.1);
+    }
+    .view-toggle-btn svg { width: 15px; height: 15px; pointer-events: none; }
+    #view-icon-vial { display: none; }
+
+    /* ── Bubbles (visible in grid/card view) ── */
+    .bubble {
+      position: absolute;
+      left: var(--bx, 50%);
+      bottom: 4%;
+      width: var(--bs, 6px);
+      height: var(--bs, 6px);
+      border-radius: 50%;
+      background: rgba(255,255,255,0.55);
+      border: 1px solid rgba(255,255,255,0.25);
+      pointer-events: none;
+      z-index: 2;
+      display: none;
+      animation: bubbleFloat calc(2.8s + var(--bd2, 0s)) ease-in infinite;
+      animation-delay: var(--bd, 0s);
+    }
+    .strain-rack.view-grid .bubble { display: block; }
+
+    @keyframes bubbleFloat {
+      0%   { transform: translateY(0) translateX(0) scale(1);   opacity: 0; }
+      8%   { opacity: 0.85; }
+      50%  { transform: translateY(-60px) translateX(var(--bwobble, 3px)) scale(0.8); opacity: 0.5; }
+      100% { transform: translateY(-130px) translateX(0) scale(0.3); opacity: 0; }
+    }
+
+    /* ── GRID / square card view ── */
+    .strain-rack.view-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(94px, 1fr));
+      gap: 12px;
+      align-items: start;
+      align-content: start;
+      overflow-x: hidden;
+      overflow-y: auto;
+      height: 100%;
+      padding: 18px 18px 22px;
+      background: none;
+      box-shadow: none;
+    }
+    .strain-rack.view-grid::-webkit-scrollbar { width: 5px; height: 0; }
+
+    .strain-rack.view-grid .strain-strip {
+      flex: none;
+      width: 100%;
+      min-width: unset;
+      height: 194px;
+      border-radius: 12px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 20px 8px 8px;
+      gap: 9px;
+      animation: cardIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation-delay: calc(var(--strip-order, 0) * 0.025s);
+    }
+
+    .strain-rack.view-grid .strip-cap {
+      top: -16px;
+      width: 58%;
+      height: 22px;
+      border-radius: 10px 10px 6px 6px;
+    }
+
+    /* syrup in card mode */
+    .strain-rack.view-grid .strain-strip::before {
+      height: var(--fill-base, 52%);
+      left: 0; right: 0;
+      border-radius: 50% 50% 0 0 / 18px 18px 0 0;
+    }
+    .strain-rack.view-grid .strain-strip:hover::before  { height: var(--fill-hover, 60%); }
+    .strain-rack.view-grid .strain-strip.selected::before { height: var(--fill-selected, 70%); }
+
+    /* no flex-basis expand in grid mode — just lift */
+    .strain-rack.view-grid .strain-strip:hover {
+      flex-basis: unset;
+      min-width: unset;
+      height: 194px;
+      transform: translateY(-5px);
+    }
+    .strain-rack.view-grid .strain-strip.selected { height: 194px; }
+
+    .strain-rack.view-grid .strip-label {
+      width: 100%;
+      left: 0;
+      bottom: 0;
+      transform: none;
+      height: 80%;
+      min-height: 0;
+      padding: 0;
+      border-radius: 0 0 10px 10px;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      background: transparent;
+      box-shadow: none;
+      border: none;
+    }
+
+    .strain-rack.view-grid .strip-label-band {
+      height: 7px;
+    }
+
+    .strain-rack.view-grid .strip-label-kicker {
+      font-size: 7px;
+      margin-top: 2px;
+    }
+
+    .strain-rack.view-grid .strip-label-name {
+      font-size: 10.5px;
+      margin-top: 5px;
+      line-height: 1.12;
+    }
+
+    .strain-rack.view-grid .strip-label-meta {
+      font-size: 6.5px;
+      margin-top: 4px;
+    }
+
+    .strain-rack.view-grid .strip-light {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 9px;
+      height: 9px;
+    }
+
+    .strain-rack.view-grid .strip-measurements {
+      top: 48px;
+      right: 12px;
+      bottom: 14px;
+      width: 28px;
+      opacity: 0.78;
+    }
+
+    .strain-rack.view-grid .strip-measure {
+      width: 15px;
+      height: 2px;
+    }
+
+    .strain-rack.view-grid .strip-measure::after {
+      right: 17px;
+      top: -6px;
+      font-size: 7px;
+      color: rgba(246, 250, 255, 0.82);
+    }
+
+    .strain-rack.view-grid .strip-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+    .strain-rack.view-grid .strip-icon svg { width: 19px; height: 19px; }
+
+    .strain-rack.view-grid .strip-name {
+      display: block;
+      top: 10px;
+      left: 8px;
+      right: 8px;
+      bottom: auto;
+      transform: none;
+      font-family: 'Bebas Neue', 'Sora', sans-serif;
+      font-size: 12px;
+      letter-spacing: 0.03em;
+      line-height: 1.05;
+      text-transform: uppercase;
+      padding: 3px 6px;
+      border-radius: 8px;
+      background: linear-gradient(180deg, rgba(3, 8, 13, 0.94), rgba(6, 13, 19, 0.82));
+      border: 1px solid rgba(255,255,255,0.42);
+      color: rgba(255,255,255,0.98);
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.72), 0 0 10px color-mix(in srgb, var(--strain-color, #b58cff) 45%, transparent);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .strain-rack.view-grid .strip-format {
+      display: none;
+    }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(14px) scale(0.93); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .empty-state {
+      border: 1px dashed rgba(184, 210, 228, 0.24);
+      border-radius: 12px;
+      padding: 28px 16px;
+      text-align: center;
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      background: rgba(255, 255, 255, 0.02);
+      align-self: center;
+      width: 100%;
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(14px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes drift {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(24px, -18px) scale(1.06); }
+    }
+
+    @keyframes syrupBloom {
+      0%, 100% { opacity: 0.56; transform: scale(0.98); }
+      50% { opacity: 0.9; transform: scale(1.02); }
+    }
+
+    @keyframes syrupCurrent {
+      0%, 100% { transform: translate3d(0, 0, 0) scaleX(1); }
+      50% { transform: translate3d(0, -10px, 0) scaleX(1.04); }
+    }
+
+    @keyframes syrupBlobFloat {
+      0%, 100% { transform: translate3d(-50%, -50%, 0) scale(1); }
+      25% { transform: translate3d(calc(-50% + 18px), calc(-50% - 10px), 0) scale(1.05); }
+      50% { transform: translate3d(calc(-50% - 14px), calc(-50% + 14px), 0) scale(0.96); }
+      75% { transform: translate3d(calc(-50% + 10px), calc(-50% - 16px), 0) scale(1.03); }
+    }
+
+    @keyframes bubbleRise {
+      0% {
+        transform: translate3d(-50%, 0, 0) scale(0.78);
+        opacity: 0;
+      }
+      12% {
+        opacity: 0.34;
+      }
+      50% {
+        opacity: 0.22;
+      }
+      100% {
+        transform: translate3d(calc(-50% + var(--drift, 0px)), calc(-100vh - 220px), 0) scale(1.14);
+        opacity: 0;
+      }
+    }
+
+    @keyframes rgbGlide {
+      0%, 100% { opacity: 0.2; filter: blur(0) saturate(1.05); }
+      50% { opacity: 0.34; filter: blur(0.8px) saturate(1.2); }
+    }
+
+    @media (max-width: 980px) {
+      .app-shell {
+        height: calc(100vh - 42px);
+        margin-top: 42px;
+        padding: 4px 12px 12px;
+        grid-template-rows: auto auto minmax(0, 1fr);
+      }
+
+      .quick-guide {
+        width: 100%;
+        max-width: none;
+        margin: 0 auto;
+        padding-top: 0;
+        transform: translateY(16px);
+        margin-bottom: -10px;
+      }
+
+      .quick-guide-title {
+        font-size: 12px;
+        letter-spacing: 0.09em;
+      }
+
+      .quick-guide-steps {
+        font-size: 8px;
+        letter-spacing: 0.02em;
+      }
+
+      .hero-logo-stack {
+        width: min(82vw, 420px);
+      }
+
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-stats {
+        justify-content: flex-start;
+        margin-top: -6px;
+      }
+
+      .hero-count-note {
+        text-align: left;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(0, 1fr);
+        margin-top: -10px;
+      }
+
+      .sidebar {
+        max-height: 47vh;
+        overflow: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="particles-canvas"></canvas>
+  <div class="syrup-lamp" id="syrup-lamp" aria-hidden="true"></div>
+  <div class="noise"></div>
+  <div class="shape a"></div>
+  <div class="shape b"></div>
+  <div class="top-right-art"></div>
+
+  <div class="titlebar">
+    <div class="titlebar-brand">
+      <img class="titlebar-cassette-icon" src="./screwai.ico" alt="Bottle icon" />
+      <span class="titlebar-title">ScrewAI &mdash; The Code'eine Processor</span>
+    </div>
+    <div class="titlebar-controls">
+      <button class="titlebar-btn" id="btn-minimize" aria-label="Minimize window">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 12h14"/>
+        </svg>
+      </button>
+      <button class="titlebar-btn" id="btn-maximize" aria-label="Maximize window">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="5" y="5" width="14" height="14" rx="1"/>
+        </svg>
+      </button>
+      <button class="titlebar-btn close" id="btn-close" aria-label="Close window">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 6l12 12M6 18L18 6"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="app-shell">
+    <div class="quick-guide">
+      <span class="quick-guide-title">How To Use ScrewAI</span>
+      <ul class="quick-guide-steps" aria-label="How to use ScrewAI">
+        <li>Choose audio to remix</li>
+        <li>Set the output folder where your rendered files should go</li>
+        <li>Select as many strains as you like</li>
+        <li>Press Render Selected Strains</li>
+      </ul>
+    </div>
+
+    <header class="hero">
+      <div class="hero-left">
+        <div class="hero-logo-stack">
+          <img class="hero-logo hero-logo-main" src="./66.png" alt="ScrewAI logo" />
+          <img class="hero-logo-clone r" src="./66.png" alt="" aria-hidden="true" />
+          <img class="hero-logo-clone b" src="./66.png" alt="" aria-hidden="true" />
+        </div>
+        <div class="hero-stats hero-naming-line" aria-label="Audio counts">
+          <span title="Detected MP3 strain scripts available on this install"><span class="stat" id="mp3-count">0</span>MP3 Available</span>
+          <span title="Detected WAV strain scripts available on this install"><span class="stat" id="wav-count">0</span>WAV Available</span>
+          <span title="Total strain scripts available on this install"><span class="stat" id="total-count">0</span>Total</span>
+        </div>
+        <div class="hero-count-note" id="count-status">Scanning available strain files...</div>
+        <div class="pro-count-note" id="pro-fomo" style="text-align:center;margin-top:2px;"></div>
+      </div>
+    </header>
+
+    <section class="layout">
+      <aside class="panel sidebar">
+        <div class="card">
+          <div class="card-title">Input Audio</div>
+          <div class="audio-drop" id="audio-drop">
+            <div class="audio-drop-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18V5l12-2v13"/>
+                <circle cx="6" cy="18" r="3"/>
+                <circle cx="18" cy="16" r="3"/>
+              </svg>
+            </div>
+            <div class="audio-drop-text">Drop or choose audio</div>
+            <div class="audio-drop-hint">MP3, WAV, FLAC, M4A, OGG</div>
+            <div class="audio-file-name" id="audio-name"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Output Destination</div>
+          <button class="output-btn" id="output-btn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span>Select output folder</span>
+          </button>
+          <div class="output-path" id="output-path"></div>
+        </div>
+
+        <div class="card settings-card">
+          <div class="card-title">Settings</div>
+          <div class="settings-status">
+            <div class="settings-status-label">Output Mode</div>
+            <div class="settings-status-value" id="format-mode-value">Upload an MP3 or WAV to lock output format</div>
+            <div class="settings-note" id="format-mode-note">By default, uploaded MP3 files only render MP3 strains, and uploaded WAV files only render WAV strains.</div>
+          </div>
+
+          <label class="setting-toggle" for="setting-mp3-to-wav">
+            <input id="setting-mp3-to-wav" type="checkbox">
+            <span class="setting-toggle-text">
+              <span class="setting-toggle-title">Allow MP3 to WAV conversion</span>
+              <span class="setting-toggle-sub">Lets MP3 uploads unlock WAV outputs in the format switcher.</span>
+            </span>
+          </label>
+
+          <label class="setting-toggle" for="setting-wav-to-mp3">
+            <input id="setting-wav-to-mp3" type="checkbox">
+            <span class="setting-toggle-text">
+              <span class="setting-toggle-title">Allow WAV to MP3 conversion</span>
+              <span class="setting-toggle-sub">Lets WAV uploads unlock MP3 outputs in the format switcher.</span>
+            </span>
+          </label>
+        </div>
+
+        <div class="process-section">
+          <button class="process-btn" id="process-btn" disabled type="button">Render Selected Strains</button>
+
+          <div class="progress-section" id="progress-section">
+            <div class="progress-info">
+              <span>Processing batch</span>
+              <span class="progress-count" id="progress-count">0 / 0</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="current-strain" id="current-strain"></div>
+          </div>
+
+          <div class="results-section" id="results-section">
+            <div class="results-title">Batch Complete</div>
+            <div class="results-list" id="results-list"></div>
+          </div>
+        </div>
+      </aside>
+
+      <section class="panel workspace">
+        <div class="workspace-head">
+          <div>
+            <div class="workspace-title">Strain Library</div>
+            <div class="workspace-sub">Free strains ready \u2022 PRO strains locked</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="pro-badge" id="pro-badge">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3h6a4 4 0 0 1 0 8H5V3zm0 8h7a4 4 0 0 1 0 8H5v-8z" opacity="0.7"/><rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 8h3a2 2 0 0 1 0 4H8V8zm0 4h4a2 2 0 0 1 0 4H8v-4z"/></svg>
+              <span id="pro-badge-text">PRO</span>
+            </span>
+            <div class="format-select-wrap">
+              <select class="format-select" id="format-select" title="Select audio format">
+                <option value="MP3">MP3</option>
+                <option value="WAV">WAV</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="workspace-toolbar">
+          <span class="strains-count" id="selected-count">0 selected</span>
+          <button class="select-all-btn" id="select-all" type="button">Select All</button>
+          <button class="process-all-btn" id="process-all" type="button" disabled>Process All</button>
+          <button class="view-toggle-btn" id="view-toggle" type="button" title="Switch view">
+            <!-- icon swapped by JS -->
+            <svg id="view-icon-vial" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="4" y="3" width="4" height="18" rx="2"/>
+              <rect x="10" y="3" width="4" height="18" rx="2"/>
+              <rect x="16" y="3" width="4" height="18" rx="2"/>
+            </svg>
+            <svg id="view-icon-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="3" y="3" width="8" height="8" rx="1.5"/>
+              <rect x="13" y="3" width="8" height="8" rx="1.5"/>
+              <rect x="3" y="13" width="8" height="8" rx="1.5"/>
+              <rect x="13" y="13" width="8" height="8" rx="1.5"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="strain-rack view-grid" id="strains-grid"></div>
+      </section>
+    </section>
+  </main>
+
+  <script src="renderer.js"></script>
+  <script src="particles.js"></script>
+</body>
+</html>

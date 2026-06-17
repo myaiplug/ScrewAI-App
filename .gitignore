@@ -1,0 +1,5 @@
+node_modules/
+dist/
+dist-installer-v2/
+build-resources/
+.electron-preview/
