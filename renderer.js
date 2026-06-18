@@ -527,10 +527,36 @@
   const resultsSection = document.getElementById('results-section');
   const resultsList = document.getElementById('results-list');
 
-  // Window Controls
-  document.getElementById('btn-minimize').addEventListener('click', () => screwaiApi.minimize());
-  document.getElementById('btn-maximize').addEventListener('click', () => screwaiApi.maximize());
-  document.getElementById('btn-close').addEventListener('click', () => screwaiApi.close());
+
+
+  // PRO Modal event listeners
+  document.getElementById('pro-modal-close').addEventListener('click', closeProModal);
+  document.getElementById('pro-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeProModal();
+  });
+  document.getElementById('ab-a').addEventListener('click', () => toggleAbSide('a'));
+  document.getElementById('ab-b').addEventListener('click', () => toggleAbSide('b'));
+  document.getElementById('ab-play').addEventListener('click', () => {
+    if (proModalIsPlaying) { stopAbPlayback(); proModalPauseTime = proModalAudioCtx ? proModalAudioCtx.currentTime - proModalStartTime : 0; }
+    else startAbPlayback();
+  });
+  document.getElementById('ab-progress').addEventListener('click', (e) => {
+    if (!proModalBuffer) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    proModalPauseTime = pct * proModalSegmentDuration;
+    if (proModalIsPlaying) { stopAbPlayback(); startAbPlayback(); }
+    else {
+      document.getElementById('ab-progress-fill').style.width = (pct * 100) + '%';
+      document.getElementById('ab-time').textContent =
+        `${Math.floor(proModalPauseTime / 60)}:${String(Math.floor(proModalPauseTime) % 60).padStart(2, '0')}`;
+    }
+  });
+  document.getElementById('pro-cta').addEventListener('click', () => {
+    closeProModal();
+    // Redirect or show payment modal (placeholder)
+    currentStrain.textContent = 'PRO unlock coming soon — stay tuned!';
+  });
 
   // Initialize
   async function init() {
@@ -895,7 +921,10 @@
   // Toggle Strain Selection
   function toggleStrain(index) {
     if (isProcessing) return;
-    if (strains[index] && strains[index].tier === 'pro') return;
+    if (strains[index] && strains[index].tier === 'pro') {
+      openProModal(strains[index]);
+      return;
+    }
     
     const card = document.querySelector(`.strain-strip[data-index="${index}"]`);
     if (selectedStrains.has(index)) {
@@ -907,6 +936,199 @@
     }
     updateSelectedCount();
     updateProcessButton();
+  }
+
+  // ── PRO Upsell Modal ──
+  let proModalAudioCtx = null;
+  let proModalSource = null;
+  let proModalBuffer = null;
+  let proModalIsPlaying = false;
+  let proModalStartTime = 0;
+  let proModalPauseTime = 0;
+  let proModalCurrentSide = 'a'; // 'a' = original, 'b' = pro preview
+  let proModalRaf = null;
+  let proModalTimerInterval = null;
+  let proModalProBuffer = null; // pre-rendered PRO preview buffer
+  let proModalSegmentStart = 0;
+  let proModalSegmentDuration = 10;
+
+  function openProModal(strain) {
+    const overlay = document.getElementById('pro-modal');
+    if (!overlay) return;
+
+    document.getElementById('pro-strain-name').textContent = strain.name;
+    document.getElementById('ab-b-desc').textContent = `${strain.name} Preview`;
+
+    // Generate bubbles in syrup
+    const syrup = document.getElementById('pro-syrup');
+    syrup.querySelectorAll('.pro-syrup-bubble-custom').forEach(el => el.remove());
+    for (let i = 0; i < 18; i++) {
+      const b = document.createElement('div');
+      b.className = 'pro-syrup-bubble pro-syrup-bubble-custom';
+      const size = 4 + Math.random() * 16;
+      b.style.cssText = `width:${size}px;height:${size}px;left:${5 + Math.random() * 90}%;bottom:-${5 + Math.random() * 10}%;--dur:${5 + Math.random() * 6}s;--delay:${Math.random() * 4}s;--drift:${(Math.random() - 0.5) * 40}px`;
+      syrup.appendChild(b);
+    }
+
+    overlay.classList.add('active');
+
+    // Setup A/B preview
+    if (browserAudioBuffer) {
+      setupAbPreview(strain);
+    }
+
+    // Start FOMO timer
+    startFomoTimer();
+
+    // Animate join count
+    animateJoinCount();
+  }
+
+  function closeProModal() {
+    document.getElementById('pro-modal').classList.remove('active');
+    stopAbPlayback();
+    if (proModalTimerInterval) { clearInterval(proModalTimerInterval); proModalTimerInterval = null; }
+  }
+
+  function setupAbPreview(strain) {
+    const buf = browserAudioBuffer;
+    const dur = buf.duration;
+    const segLen = Math.min(proModalSegmentDuration, dur * 0.8);
+    const maxStart = Math.max(0, dur - segLen);
+    proModalSegmentStart = Math.random() * maxStart;
+    proModalSegmentDuration = segLen;
+
+    // Extract original segment
+    const sr = buf.sampleRate;
+    const ch = buf.numberOfChannels;
+    const segSamples = Math.floor(segLen * sr);
+    const origBuffer = new OfflineAudioContext(ch, segSamples, sr).createBuffer(ch, segSamples, sr);
+    for (let c = 0; c < ch; c++) {
+      const src = buf.getChannelData(c);
+      const dst = origBuffer.getChannelData(c);
+      const offset = Math.floor(proModalSegmentStart * sr);
+      for (let s = 0; s < segSamples && offset + s < src.length; s++) {
+        dst[s] = src[offset + s];
+      }
+    }
+    proModalBuffer = origBuffer; // store original segment as base
+
+    // Pre-render PRO processed version
+    const profile = getWaProfile(strain.name);
+    if (profile) {
+      renderWaChain(origBuffer, profile).then(proBuf => {
+        proModalProBuffer = proBuf;
+      }).catch(e => console.error('PRO preview render error:', e));
+    } else {
+      proModalProBuffer = null;
+    }
+
+    // Reset player state
+    stopAbPlayback();
+    proModalCurrentSide = 'a';
+    document.getElementById('ab-a').classList.add('active');
+    document.getElementById('ab-b').classList.remove('active');
+    document.getElementById('ab-time').textContent = '0:00';
+    document.getElementById('ab-progress-fill').style.width = '0%';
+  }
+
+  function toggleAbSide(side) {
+    if (side === proModalCurrentSide) return;
+    const wasPlaying = proModalIsPlaying;
+    stopAbPlayback();
+    proModalCurrentSide = side;
+    document.getElementById('ab-a').classList.toggle('active', side === 'a');
+    document.getElementById('ab-b').classList.toggle('active', side === 'b');
+    document.getElementById('ab-time').textContent = '0:00';
+    document.getElementById('ab-progress-fill').style.width = '0%';
+    if (wasPlaying) startAbPlayback();
+  }
+
+  function startAbPlayback() {
+    if (!proModalBuffer) return;
+    stopAbPlayback();
+
+    proModalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = proModalAudioCtx.createBufferSource();
+    const bufferToPlay = proModalCurrentSide === 'b' && proModalProBuffer
+      ? proModalProBuffer : proModalBuffer;
+    src.buffer = bufferToPlay;
+    src.connect(proModalAudioCtx.destination);
+    src.start(0, proModalPauseTime);
+    proModalSource = src;
+    proModalStartTime = proModalAudioCtx.currentTime - proModalPauseTime;
+    proModalIsPlaying = true;
+    document.getElementById('ab-play').innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+
+    src.onended = () => { stopAbPlayback(); proModalPauseTime = 0; };
+
+    updateAbProgress();
+  }
+
+  function stopAbPlayback() {
+    if (proModalRaf) { cancelAnimationFrame(proModalRaf); proModalRaf = null; }
+    if (proModalSource) {
+      try { proModalSource.stop(); } catch(e) {}
+      proModalSource.disconnect();
+      proModalSource = null;
+    }
+    if (proModalAudioCtx) {
+      proModalAudioCtx.close().catch(() => {});
+      proModalAudioCtx = null;
+    }
+    proModalIsPlaying = false;
+    document.getElementById('ab-play').innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>';
+  }
+
+  function updateAbProgress() {
+    if (!proModalIsPlaying) return;
+    const elapsed = proModalAudioCtx
+      ? proModalAudioCtx.currentTime - proModalStartTime
+      : proModalPauseTime;
+    const pct = Math.min(100, (elapsed / proModalSegmentDuration) * 100);
+    document.getElementById('ab-progress-fill').style.width = pct + '%';
+    const secs = Math.floor(elapsed);
+    document.getElementById('ab-time').textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+    if (elapsed >= proModalSegmentDuration) {
+      stopAbPlayback();
+      proModalPauseTime = 0;
+      return;
+    }
+    proModalRaf = requestAnimationFrame(updateAbProgress);
+  }
+
+  function startFomoTimer() {
+    if (proModalTimerInterval) clearInterval(proModalTimerInterval);
+    let mins = 14;
+    let secs = Math.floor(32 + Math.random() * 120);
+    if (secs >= 60) { mins += Math.floor(secs / 60); secs = secs % 60; }
+    const update = () => {
+      if (secs <= 0 && mins <= 0) { secs = 59; mins = 14; }
+      if (secs <= 0) { mins--; secs = 59; }
+      secs--;
+      document.getElementById('pro-timer').textContent =
+        `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    };
+    update();
+    proModalTimerInterval = setInterval(update, 1000);
+  }
+
+  function animateJoinCount() {
+    const el = document.getElementById('pro-joined');
+    const base = parseInt(el.textContent.replace(/,/g, '')) || 847;
+    let current = base;
+    const interval = setInterval(() => {
+      current += Math.floor(Math.random() * 3) + 1;
+      el.textContent = current.toLocaleString();
+    }, 3000 + Math.random() * 4000);
+    // clean up when modal closes — watch for modal close
+    const observer = new MutationObserver(() => {
+      if (!document.getElementById('pro-modal').classList.contains('active')) {
+        clearInterval(interval);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.getElementById('pro-modal'), { attributes: true, attributeFilter: ['class'] });
   }
 
   // Update Selected Count
