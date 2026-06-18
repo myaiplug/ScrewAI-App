@@ -15,15 +15,482 @@
     mp3ToWav: false,
     wavToMp3: false
   };
+  let browserAudioFile = null; // File object for browser mode
+  let browserAudioBuffer = null; // decoded AudioBuffer for browser mode
+  let isBrowser = false; // true when running outside Electron
+
+  // ── Web Audio Effect Profiles ──
+  const WA = {
+    // [slowdown, eqBands, {modulation}, stereoWiden]
+    // eq: [freq, gain, Q][]
+    // modulation: {tremolo:[rate,depth], vibrato:[rate,depth], phaser:[rate,depth], echo:[delay,decay,mix]}
+
+    bassHeavy:  { slowdown:0.85, eq:[[45,6,1.2],[110,3.8,1.2],[1000,-3,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, stereoWiden:1 },
+    trunkRattle:{ slowdown:0.9,  eq:[[50,5,1.2],[120,3.5,1.2],[700,-2,1],[3000,-2.5,1],[8500,1.8,1.1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, tremolo:[0.9,0.55], stereoWiden:1.25 },
+    trunkPress: { slowdown:0.89, eq:[[50,4.5,1.2],[130,3.2,1.2],[750,-1.8,1],[3200,-2.2,1],[9000,1.5,1.1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, tremolo:[1.2,0.45], stereoWiden:1.2 },
+    codeineSway:{ slowdown:0.93, eq:[[75,3.2,1.1],[140,2.3,1.2],[600,-1.5,1],[2800,-1.6,1],[9800,2.4,1.1]], lowpass:8500, highpass:28, lowpass2:18500, compressor:true, limiter:-0.3, normalize:-14, vibrato:[0.35,0.12], phaser:[0.2,0.3], stereoWiden:1.1 },
+    codeineGlide:{slowdown:0.92, eq:[[80,3,1.1],[150,2,1.2],[700,-1.2,1],[3000,-1.5,1],[9500,2,1.1]], lowpass:9000, highpass:28, lowpass2:18500, compressor:true, limiter:-0.3, normalize:-14, phaser:[0.15,0.25], stereoWiden:1.1 },
+    leanDrift: { slowdown:0.94, eq:[[70,3,1.1],[110,2,1.2],[650,-1.2,1],[3200,-1.8,1],[9200,2.2,1.1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, tremolo:[1.6,0.28], stereoWiden:1.15 },
+    choppedCut: { slowdown:0.87, eq:[[60,4.5,1.2],[1200,-2.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, tremolo:[3,0.18], echo:[0.23,0.28,0.7] },
+    chopSuey:   { slowdown:0.86, eq:[[55,4,1.2],[1500,-2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, tremolo:[2.5,0.2], echo:[0.18,0.22,0.65] },
+    slowBurn:   { slowdown:0.78, eq:[[60,3.5,1.2],[200,2.5,1.2],[500,-1.5,1],[4000,-2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, tremolo:[0.5,0.15] },
+    extreme:    { slowdown:0.65, eq:[[80,3,1.2],[300,2,1],[2000,-1.5,1]], highpass:28, lowpass:16000, compressor:true, limiter:-0.3, normalize:-14 },
+    basicSlow:  { slowdown:0.85, eq:[[100,2,1],[2000,-1,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14 },
+    mildSlow:   { slowdown:0.88, eq:[[120,1.5,1],[1500,-0.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14 },
+    basicDef:   { slowdown:0.88, eq:[[100,1.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14 },
+    basicEQ:    { slowdown:0.85, eq:[[60,2.5,1.2],[4000,-1.5,1],[10000,2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14 },
+    basicOG:    { slowdown:0.85, eq:[[80,2,1.2]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14 },
+    basicSlowSlow:{slowdown:0.82, eq:[[100,2,1],[2000,-1,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14 },
+    tapeMelt:   { slowdown:0.88, eq:[[200,3,1.2],[3000,-2.5,1],[8000,-3,1],[12000,1.5,1]], highpass:40, lowpass:14000, compressor:true, limiter:-0.3, normalize:-14, vibrato:[0.2,0.08], stereoWiden:0.85 },
+    vinylStatic:{ slowdown:0.86, eq:[[150,2.5,1],[2500,-2,1],[7000,-3.5,1],[11000,2,1]], highpass:50, lowpass:13500, compressor:true, limiter:-0.3, normalize:-14, vibrato:[0.15,0.05], stereoWiden:0.8 },
+    tapeFat:    { slowdown:0.87, eq:[[80,3,1.2],[300,2,1.2],[5000,-2,1]], highpass:30, lowpass:16000, compressor:true, limiter:-0.3, normalize:-14, stereoWiden:0.9 },
+    analogWarm: { slowdown:0.9,  eq:[[100,2.5,1],[500,1.5,1],[6000,-2,1]], highpass:30, lowpass:16500, compressor:true, limiter:-0.3, normalize:-14, stereoWiden:0.9 },
+    vhs:        { slowdown:0.84, eq:[[200,3,1],[3000,-3,1],[8000,-4,1]], highpass:50, lowpass:12000, compressor:true, limiter:-0.3, normalize:-14, vibrato:[0.3,0.1], stereoWiden:0.7 },
+    lateNight:  { slowdown:0.9,  eq:[[60,2.5,1.2],[250,1.5,1],[2000,-2,1],[8000,-2.5,1],[12000,2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.35,0.2,0.4] },
+    midnightTint:{slowdown:0.88, eq:[[50,3,1.2],[200,2.5,1],[3000,-2,1],[10000,-1.5,1]], highpass:28, lowpass:18000, compressor:true, limiter:-0.3, normalize:-14, echo:[0.4,0.18,0.35] },
+    nightRide:  { slowdown:0.89, eq:[[80,2.5,1.2],[300,2,1],[1500,-2,1],[7500,-2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.3,0.25,0.45], tremolo:[0.4,0.12] },
+    echoBass:   { slowdown:0.86, eq:[[50,4,1.2],[120,3,1.2],[2000,-2.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.25,0.35,0.75] },
+    slowEcho:   { slowdown:0.84, eq:[[80,2,1.2],[3000,-1.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.3,0.3,0.65] },
+    slabCruise: { slowdown:0.9,  eq:[[60,3,1.2],[250,2,1],[1500,-1.5,1],[5000,-1.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, tremolo:[0.6,0.2], stereoWiden:1.1 },
+    htownFloat: { slowdown:0.91, eq:[[65,3,1.2],[130,2.5,1],[800,-1.5,1],[3500,-2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, phaser:[0.1,0.2], stereoWiden:1.15 },
+    cleanGlide: { slowdown:0.92, eq:[[100,2,1.1],[500,1.5,1],[3000,-1.5,1],[10000,1.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, stereoWiden:1.05 },
+    purpleWave: { slowdown:0.88, eq:[[70,3.5,1.2],[150,2.5,1.2],[600,-1.5,1],[4000,-2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, phaser:[0.12,0.22], stereoWiden:1.1 },
+    phonkShadow:{ slowdown:0.84, eq:[[50,4,1.2],[120,3,1.2],[800,-2.5,1],[4000,-3,1],[10000,2,1]], highpass:28, lowpass:17500, compressor:true, limiter:-0.3, normalize:-14, tremolo:[1.8,0.15], stereoWiden:1.2 },
+    filterPhase:{ slowdown:0.86, eq:[[60,3,1.2],[250,2,1],[1200,-2,1],[5000,-2.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, phaser:[0.25,0.35], stereoWiden:1.1 },
+    screwLoud:  { slowdown:0.82, eq:[[80,3.5,1.2],[200,2.5,1],[1000,-2,1],[6000,-1.5,1],[14000,2,1]], highpass:28, lowpass:19000, compressor:true, limiter:-0.3, normalize:-14, stereoWiden:1.3 },
+    screwWide:  { slowdown:0.8,  eq:[[100,2,1.2],[2000,-1.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, stereoWiden:1.5, echo:[0.15,0.12,0.35] },
+    wock:       { slowdown:0.85, eq:[[80,3.5,1.2],[200,2.5,1],[600,-1.5,1],[3000,-2,1],[10000,2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.15,0.2,0.4] },
+    tuss:       { slowdown:0.88, eq:[[70,3,1.2],[150,2,1],[800,-2,1],[5000,-2.5,1],[12000,2.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, tremolo:[0.8,0.2] },
+    tris:       { slowdown:0.87, eq:[[90,3,1.2],[180,2.5,1],[700,-1.5,1],[4000,-2,1],[11000,2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, phaser:[0.18,0.28] },
+    quali:      { slowdown:0.86, eq:[[100,2.5,1.1],[250,2,1],[1000,-1.5,1],[6000,-2,1],[14000,2.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.12,0.15,0.3] },
+    activis:    { slowdown:0.85, eq:[[60,3.5,1.2],[180,2,1],[900,-1.8,1],[5000,-2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, tremolo:[1.2,0.18] },
+    akorn:      { slowdown:0.88, eq:[[80,3,1.2],[220,2,1],[1000,-2,1],[8000,1.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, vibrato:[0.3,0.08] },
+    barre:      { slowdown:0.85, eq:[[100,2.5,1],[250,2,1],[3000,-2,1],[12000,2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, stereoWiden:1.15 },
+    hydro:      { slowdown:0.87, eq:[[70,3,1.2],[300,2.5,1],[2000,-1.5,1],[10000,1.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.2,0.18,0.5], phaser:[0.22,0.2] },
+    halfScrew:  { slowdown:0.5,  eq:[[100,3,1],[2000,-1.5,1]], highpass:28, lowpass:18000, compressor:true, limiter:-0.3, normalize:-14 },
+    slowMoe:    { slowdown:0.55, eq:[[80,2.5,1],[300,2,1],[3000,-2,1]], highpass:28, lowpass:18000, compressor:true, limiter:-0.3, normalize:-14 },
+    extraStereo:{ slowdown:1,    eq:[], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, stereoWiden:1.8 },
+    master:     { slowdown:1,    eq:[[60,2,1.2],[300,1.5,1],[6000,-1.5,1],[12000,2,1]], highpass:28, lowpass:20000, compressor:true, limiter:-0.1, normalize:-13 },
+    hollowTrap: { slowdown:0.88, eq:[[50,4,1.2],[200,3,1.2],[3000,-3,1],[10000,2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.28,0.22,0.6] },
+    oilSpill:   { slowdown:0.82, eq:[[60,3.5,1.2],[250,2,1],[2000,-2.5,1],[8000,-3,1]], highpass:30, lowpass:16000, compressor:true, limiter:-0.3, normalize:-14, vibrato:[0.25,0.1], stereoWiden:0.8 },
+    spacedOut:  { slowdown:0.9,  eq:[[80,2,1],[500,1.5,1],[3000,-1.5,1],[10000,1.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.45,0.3,0.55] },
+    wideVerb:   { slowdown:0.88, eq:[], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.5,0.35,0.5], stereoWiden:1.5 },
+    shimmer:    { slowdown:0.92, eq:[[200,2,1],[5000,2.5,1],[10000,3,1],[15000,2.5,1]], highpass:40, lowpass:20000, compressor:true, limiter:-0.3, normalize:-14, stereoWiden:1.2 },
+    punchy:     { slowdown:0.85, eq:[[60,4,1.2],[200,3,1.2],[2000,-2.5,1],[8000,-1.5,1]], highpass:28, lowpass:19000, compressor:true, limiter:-0.2, normalize:-13, stereoWiden:1.1 },
+    babySlow:   { slowdown:0.82, eq:[[80,2,1.2],[300,1.5,1],[3000,-1.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14 },
+    dirtySprite:{ slowdown:0.86, eq:[[60,3,1.2],[250,2,1],[2000,-2,1],[9000,1.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.2,0.25,0.55] },
+    doubleCup:  { slowdown:0.84, eq:[[70,3.5,1.2],[150,2.5,1],[800,-1.5,1],[5000,-2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, phaser:[0.2,0.25], stereoWiden:1.15 },
+    neonRainfall:{slowdown:0.87, eq:[[40,3.5,1.2],[120,2.5,1],[3000,-2,1],[10000,3,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.4,0.28,0.5], tremolo:[0.3,0.1] },
+    purpleDungeon:{slowdown:0.83, eq:[[60,4,1.2],[150,3,1.2],[700,-2,1],[4000,-2.5,1]], highpass:28, lowpass:18000, compressor:true, limiter:-0.3, normalize:-14, phaser:[0.15,0.3], tremolo:[1.2,0.15] },
+    styrofoam:  { slowdown:0.85, eq:[[80,3,1.2],[200,2,1],[1000,-2,1],[6000,-1.5,1],[13000,2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.12,0.18,0.35] },
+    trissVortex:{ slowdown:0.82, eq:[[90,3.5,1.2],[180,2.5,1],[700,-2,1],[5000,-2.5,1],[12000,2.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, phaser:[0.25,0.32], vibrato:[0.4,0.1] },
+    ogScrew:    { slowdown:0.75, eq:[[100,3,1.2],[300,2,1],[2000,-2,1],[8000,2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14 },
+    bassBoost:  { slowdown:0.88, eq:[[45,5,1.2],[100,3.5,1.2],[2000,-2,1],[8000,-1,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, stereoWiden:1.15 },
+    distortion: { slowdown:0.85, eq:[[60,3,1.2],[300,1.5,1],[3000,-2,1],[8000,2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14 },
+    flanger:    { slowdown:1,    eq:[[100,1.5,1],[5000,-1.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, phaser:[0.08,0.5] },
+    reverb:     { slowdown:0.95, eq:[[200,2,1],[5000,-1,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.6,0.4,0.6] },
+    reverseEcho:{ slowdown:0.9,  eq:[[80,2,1],[3000,-1.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.35,0.3,0.5] },
+    stereoWiden:{ slowdown:1,    eq:[], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, stereoWiden:1.6 },
+    tremoloFx:  { slowdown:0.9,  eq:[[100,1.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, tremolo:[4,0.35] },
+    leanTris:   { slowdown:0.9,  eq:[[80,2.5,1.2],[200,2,1],[1000,-1.5,1],[5000,-2,1],[11000,2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, phaser:[0.15,0.2], tremolo:[0.6,0.15] },
+    screwTrisPink:{slowdown:0.86, eq:[[90,3,1.2],[180,2.5,1],[800,-1.5,1],[4000,-2,1],[10000,2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, phaser:[0.18,0.25], stereoWiden:1.1 },
+    screwTussRed:{slowdown:0.87, eq:[[70,3.5,1.2],[150,2.5,1],[800,-2,1],[5000,-2.5,1],[12000,2.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, tremolo:[0.9,0.22] },
+    rubberband: { slowdown:0.7,  eq:[[100,2,1],[3000,-1.5,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14 },
+    allInOne:   { slowdown:0.86, eq:[[60,3,1.2],[250,2,1],[1000,-2,1],[5000,-1.5,1],[10000,2,1]], highpass:28, lowpass:18500, compressor:true, limiter:-0.3, normalize:-14, echo:[0.2,0.2,0.4], tremolo:[1.2,0.15], stereoWiden:1.1 },
+  };
+
+  function getWaProfile(name) {
+    const n = name.toLowerCase().replace(/[^a-z0-9]/g,'');
+    if (n.includes('bass')&&n.includes('sink')) return WA.bassHeavy;
+    if (n.includes('trunk')&&n.includes('flex')) return WA.trunkRattle;
+    if (n.includes('trunk')&&n.includes('pressure')) return WA.trunkPress;
+    if (n.includes('codeinesway')||(n.includes('codeine')&&n.includes('sway'))) return WA.codeineSway;
+    if (n.includes('codeine')&&(n.includes('glide')||n.includes('glid'))) return WA.codeineGlide;
+    if (n.includes('lean')&&n.includes('drift')) return WA.leanDrift;
+    if (n.includes('chopped')||(n.includes('chop')&&n.includes('cut'))) return WA.choppedCut;
+    if (n.includes('chopsuey')) return WA.chopSuey;
+    if (n.includes('slow_burn')||n.includes('slowburn')) return WA.slowBurn;
+    if (n.includes('extreme')) return WA.extreme;
+    if (n.includes('mildly')) return WA.mildSlow;
+    if (n.includes('basic')&&n.includes('slow')&&n.includes('slow')) return WA.basicSlowSlow;
+    if (n.includes('basic')&&n.includes('default')) return WA.basicDef;
+    if (n.includes('basic')&&n.includes('eq')) return WA.basicEQ;
+    if (n.includes('basic')&&n.includes('og')) return WA.basicOG;
+    if (n.includes('basic')&&n.includes('rb7')) return WA.basicDef;
+    if (n.includes('basic_slow')||(n.includes('basic')&&n.includes('slow'))) return WA.basicSlow;
+    if (n.includes('tape')&&n.includes('melt')) return WA.tapeMelt;
+    if (n.includes('vinyl')&&n.includes('static')) return WA.vinylStatic;
+    if (n.includes('tapefat')||(n.includes('tape')&&n.includes('fat'))) return WA.tapeFat;
+    if (n.includes('analog')||n.includes('warmth')) return WA.analogWarm;
+    if (n.includes('vhs')) return WA.vhs;
+    if (n.includes('vinyl')&&n.includes('dust')) return WA.vinylStatic;
+    if (n.includes('late_night')||n.includes('latenight')) return WA.lateNight;
+    if (n.includes('midnight')) return WA.midnightTint;
+    if (n.includes('night_ride')||n.includes('nightride')) return WA.nightRide;
+    if (n.includes('echo')&&n.includes('bass')) return WA.echoBass;
+    if (n.includes('screwed')&&n.includes('echo')) return WA.echoBass;
+    if (n.includes('slow_echo')||n.includes('slowecho')) return WA.slowEcho;
+    if (n.includes('slab')||n.includes('cruise')) return WA.slabCruise;
+    if (n.includes('htown')||n.includes('float')) return WA.htownFloat;
+    if (n.includes('clean')&&n.includes('glide')) return WA.cleanGlide;
+    if (n.includes('purple')&&n.includes('wave')) return WA.purpleWave;
+    if (n.includes('phonk')||n.includes('shadow')) return WA.phonkShadow;
+    if (n.includes('filter')||n.includes('phase')) return WA.filterPhase;
+    if (n.includes('screw')&&n.includes('loud')) return WA.screwLoud;
+    if (n.includes('screw')&&n.includes('wide')) return WA.screwWide;
+    if (n.includes('wock')) return WA.wock;
+    if (n.includes('tuss')) return WA.tuss;
+    if (n.includes('tris')&&n.includes('pink')) return WA.screwTrisPink;
+    if (n.includes('tris')&&n.includes('vortex')) return WA.trissVortex;
+    if (n.includes('tris')) return WA.tris;
+    if (n.includes('quali')) return WA.quali;
+    if (n.includes('activis')) return WA.activis;
+    if (n.includes('akorn')||n.includes('acorn')) return WA.akorn;
+    if (n.includes('barre')) return WA.barre;
+    if (n.includes('hydro')) return WA.hydro;
+    if (n.includes('half')) return WA.halfScrew;
+    if (n.includes('slowmoe')||(n.includes('slow')&&n.includes('moe'))) return WA.slowMoe;
+    if (n.includes('extras')||n.includes('extra_st')) return WA.extraStereo;
+    if (n.includes('master')||n.includes('mastering')) return WA.master;
+    if (n.includes('hollow')||n.includes('trap')) return WA.hollowTrap;
+    if (n.includes('oil')||n.includes('spill')) return WA.oilSpill;
+    if (n.includes('spaced')) return WA.spacedOut;
+    if (n.includes('wide')&&n.includes('verb')) return WA.wideVerb;
+    if (n.includes('shimmer')||n.includes('clean')) return WA.shimmer;
+    if (n.includes('punchy')) return WA.punchy;
+    if (n.includes('babyslow')||(n.includes('baby')&&n.includes('slow'))) return WA.babySlow;
+    if (n.includes('dirty')||n.includes('sprite')) return WA.dirtySprite;
+    if (n.includes('double')||n.includes('cup')) return WA.doubleCup;
+    if (n.includes('neon')||n.includes('rainfall')) return WA.neonRainfall;
+    if (n.includes('dungeon')||n.includes('purple')&&n.includes('dun')) return WA.purpleDungeon;
+    if (n.includes('styrofoam')||n.includes('styr')) return WA.styrofoam;
+    if (n.includes('ogscrew')||(n.includes('og')&&n.includes('screw'))) return WA.ogScrew;
+    if (n.includes('bass_boost')||(n.includes('bass')&&n.includes('boost'))) return WA.bassBoost;
+    if (n.includes('distort')) return WA.distortion;
+    if (n.includes('flanger')) return WA.flanger;
+    if (n.includes('reverb')) return WA.reverb;
+    if (n.includes('reverse')||n.includes('limiter')) return WA.reverseEcho;
+    if (n.includes('stereo')&&n.includes('widen')) return WA.stereoWiden;
+    if (n.includes('tremolo')) return WA.tremoloFx;
+    if (n.includes('lean')&&n.includes('tris')) return WA.leanTris;
+    if (n.includes('tuss')&&n.includes('red')) return WA.screwTussRed;
+    if (n.includes('rubberband')||n.includes('rubber')) return WA.rubberband;
+    if (n.includes('allinone')||n.includes('all_in')) return WA.allInOne;
+    if (n.includes('screwai_tris')||n.includes('screwai_tris_pink')) return WA.screwTrisPink;
+    if (n.includes('screwai_tuss')||n.includes('screwai_tuss_red')) return WA.screwTussRed;
+    if (n.includes('move')||n.includes('around')) return WA.basicSlow;
+    if (n.includes('wide')&&n.includes('verb')) return WA.wideVerb;
+    if (n.includes('vinyl')) return WA.vinylStatic;
+    if (n.includes('echo')) return WA.slowEcho;
+    if (n.includes('chorus')) return WA.shimmer;
+    if (n.includes('vocal')||n.includes('presence')) return WA.shimmer;
+    if (n.includes('lean')&&(n.includes('phone')||n.includes('speaker'))) return WA.doubleCup;
+    return WA.basicSlow;
+  }
+
+  // ── Web Audio Processing Engine ──
+  async function processBrowserAudio(file, strains) {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    const arrayBuffer = await file.arrayBuffer();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    audioCtx.close();
+
+    const results = [];
+    for (let i = 0; i < strains.length; i++) {
+      const strain = strains[i];
+      screwaiApi.onProgress({
+        current: i + 1,
+        total: strains.length,
+        strain: strain.name,
+        status: 'processing'
+      });
+      progressCount.textContent = `${i + 1} / ${strains.length}`;
+      progressFill.style.width = `${((i + 1) / strains.length) * 100}%`;
+      currentStrain.textContent = `Processing: ${strain.name}`;
+
+      try {
+        const profile = getWaProfile(strain.name);
+        const outputBuffer = await renderWaChain(audioBuffer, profile);
+        const blob = audioBufferToWavBlob(outputBuffer);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${file.name.replace(/\.[^.]+$/, '')}_${strain.name.replace(/[^a-z0-9]/gi, '_')}.wav`;
+        a.click();
+        URL.revokeObjectURL(url);
+        results.push({ strain: strain.name, success: true, output: a.download });
+      } catch (err) {
+        console.error(`Failed to process ${strain.name}:`, err);
+        results.push({ strain: strain.name, success: false, error: err.message });
+      }
+    }
+    return results;
+  }
+
+  async function renderWaChain(audioBuffer, cfg) {
+    const duration = audioBuffer.duration / (cfg.slowdown || 1);
+    const length = Math.ceil(audioBuffer.sampleRate * duration);
+    const ctx = new OfflineAudioContext(audioBuffer.numberOfChannels, length, audioBuffer.sampleRate);
+
+    const source = ctx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.playbackRate.value = cfg.slowdown || 1;
+
+    let node = source;
+    let prepend = []; // nodes that connect before the chain (vibrato modulates source)
+
+    // EQ peaking filters
+    if (cfg.eq) {
+      for (const [freq, gain, Q] of cfg.eq) {
+        const f = ctx.createBiquadFilter();
+        f.type = 'peaking';
+        f.frequency.value = freq;
+        f.gain.value = gain;
+        f.Q.value = Q || 1;
+        node.connect(f);
+        node = f;
+      }
+    }
+
+    // Simple bass boost (lowshelf)
+    const bassEq = cfg.eq ? cfg.eq.find(e => e[0] <= 120 && e[1] >= 3) : null;
+    if (!bassEq && cfg.eq && cfg.eq.length === 0) {
+      // no-op, some profiles have no EQ
+    }
+
+    // Highpass
+    if (cfg.highpass) {
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = cfg.highpass;
+      node.connect(hp);
+      node = hp;
+    }
+
+    // Lowpass (first stage, if present)
+    if (cfg.lowpass && cfg.lowpass < 18000) {
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = cfg.lowpass;
+      node.connect(lp);
+      node = lp;
+    }
+
+    // Tremolo: Oscillator → Gain → GainNode.gain
+    if (cfg.tremolo) {
+      const [rate, depth] = cfg.tremolo;
+      const amp = ctx.createGain();
+      amp.gain.value = 1;
+      const osc = ctx.createOscillator();
+      osc.frequency.value = rate;
+      osc.type = 'sine';
+      const modGain = ctx.createGain();
+      modGain.gain.value = depth;
+      const bias = ctx.createConstantSource();
+      bias.offset.value = 1 - depth;
+      osc.connect(modGain);
+      modGain.connect(amp.gain);
+      bias.connect(amp.gain);
+      node.connect(amp);
+      node = amp;
+      osc.start();
+      bias.start();
+    }
+
+    // Vibrato: modulate source.detune (connected before any routing)
+    if (cfg.vibrato) {
+      const [rate, depth] = cfg.vibrato;
+      const osc = ctx.createOscillator();
+      osc.frequency.value = rate;
+      osc.type = 'sine';
+      const vGain = ctx.createGain();
+      vGain.gain.value = depth * 800; // cents
+      osc.connect(vGain);
+      vGain.connect(source.detune);
+      osc.start();
+    }
+
+    // Phaser: sweeping allpass filter
+    if (cfg.phaser) {
+      const [rate, depth] = cfg.phaser;
+      const ph = ctx.createBiquadFilter();
+      ph.type = 'allpass';
+      ph.Q.value = 2;
+      const dur = audioBuffer.duration / (cfg.slowdown || 1);
+      const pts = 200;
+      const curve = new Float32Array(pts);
+      for (let j = 0; j < pts; j++) {
+        const phase = (j / pts) * Math.PI * 2 * rate * dur;
+        curve[j] = 500 + Math.sin(phase) * 2000 * Math.min(depth, 1);
+      }
+      ph.frequency.setValueCurveAtTime(curve, 0, dur);
+      node.connect(ph);
+      node = ph;
+    }
+
+    // Echo: Delay + Feedback
+    if (cfg.echo) {
+      const [delayTime, decay, mix] = cfg.echo;
+      const delay = ctx.createDelay(2);
+      delay.delayTime.value = delayTime;
+      const feedback = ctx.createGain();
+      feedback.gain.value = decay;
+      const wet = ctx.createGain();
+      wet.gain.value = mix;
+      const dry = ctx.createGain();
+      dry.gain.value = 1 - mix;
+      const merge = ctx.createGain();
+      node.connect(dry);
+      node.connect(delay);
+      delay.connect(feedback);
+      feedback.connect(delay);
+      delay.connect(wet);
+      dry.connect(merge);
+      wet.connect(merge);
+      node = merge;
+    }
+
+    // Second-stage lowpass (after modulation)
+    if (cfg.lowpass2) {
+      const lp2 = ctx.createBiquadFilter();
+      lp2.type = 'lowpass';
+      lp2.frequency.value = cfg.lowpass2;
+      node.connect(lp2);
+      node = lp2;
+    }
+
+    // Compressor
+    if (cfg.compressor) {
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -18;
+      comp.ratio.value = 2.2;
+      comp.attack.value = 0.03;
+      comp.release.value = 0.35;
+      node.connect(comp);
+      node = comp;
+    }
+
+    // Simple hard limiter via makeup gain (approximation)
+    if (cfg.limiter) {
+      const limitGain = ctx.createGain();
+      limitGain.gain.value = 0.985;
+      node.connect(limitGain);
+      node = limitGain;
+    }
+
+    // Stereo widening: increase side channel gain
+    if (cfg.stereoWiden && cfg.stereoWiden !== 1) {
+      const split = ctx.createChannelSplitter(2);
+      const leftG = ctx.createGain();
+      const rightG = ctx.createGain();
+      const merge = ctx.createChannelMerger(2);
+      leftG.gain.value = 1;
+      rightG.gain.value = cfg.stereoWiden;
+      node.connect(split);
+      split.connect(leftG, 0);
+      split.connect(rightG, 1);
+      leftG.connect(merge, 0, 0);
+      rightG.connect(merge, 0, 1);
+      node = merge;
+    }
+
+    node.connect(ctx.destination);
+    source.start(0);
+    return ctx.startRendering();
+  }
+
+  function audioBufferToWavBlob(audioBuffer) {
+    const numChannels = audioBuffer.numberOfChannels;
+    const sampleRate = audioBuffer.sampleRate;
+    const format = 1; // PCM
+    const bitDepth = 16;
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numChannels * bytesPerSample;
+    const data = [];
+    for (let ch = 0; ch < numChannels; ch++) {
+      data.push(audioBuffer.getChannelData(ch));
+    }
+    const length = data[0].length;
+    const buffer = new ArrayBuffer(44 + length * blockAlign);
+    const view = new DataView(buffer);
+
+    function writeString(offset, str) {
+      for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+    }
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + length * blockAlign, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, format, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitDepth, true);
+    writeString(36, 'data');
+    view.setUint32(40, length * blockAlign, true);
+
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+      for (let ch = 0; ch < numChannels; ch++) {
+        let sample = Math.max(-1, Math.min(1, data[ch][i]));
+        sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+        view.setInt16(offset, sample, true);
+        offset += 2;
+      }
+    }
+    return new Blob([buffer], { type: 'audio/wav' });
+  }
+
+  async function handleBrowserAudioFile(file) {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    const arrayBuffer = await file.arrayBuffer();
+    browserAudioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    audioCtx.close();
+    browserAudioFile = file;
+    const path = `browser://${file.name}`;
+    audioPath = path;
+    sourceAudioFormat = detectAudioFormat(file.name);
+    audioName.textContent = file.name;
+    audioDrop.classList.add('has-file');
+    outputDir = '[Browser Download]';
+    outputPath.textContent = 'Files will be downloaded to your browser';
+    outputBtn.classList.add('has-folder');
+    syncFormatAvailability();
+    updateProcessButton();
+    return path;
+  }
 
   const fallbackApi = {
     minimize: () => {},
     maximize: () => {},
     close: () => {},
-    selectAudio: async () => null,
-    selectOutput: async () => null,
+    selectAudio: async () => {
+      return new Promise((resolve) => {
+        const input = document.getElementById('audio-file-input');
+        if (!input) { resolve(null); return; }
+        input.value = '';
+        input.onchange = async (e) => {
+          const file = e.target.files[0];
+          if (!file) { resolve(null); return; }
+          const path = await handleBrowserAudioFile(file);
+          resolve(path);
+        };
+        input.click();
+      });
+    },
+    selectOutput: async () => {
+      return '[Browser Download]';
+    },
     getStrains: async () => createFallbackStrains(),
-    processAudio: async () => [],
+    processAudio: async (data) => {
+      const file = browserAudioFile;
+      if (!file) throw new Error('No audio file loaded');
+      return processBrowserAudio(file, data.strains);
+    },
     onProgress: () => {}
   };
 
@@ -527,11 +994,14 @@
       audioDrop.classList.remove('drag-over');
     });
 
-    audioDrop.addEventListener('drop', (e) => {
+    audioDrop.addEventListener('drop', async (e) => {
       e.preventDefault();
       audioDrop.classList.remove('drag-over');
-      // Note: In Electron, we'd need to handle this differently
-      // For now, user should use click to select
+      if (isProcessing) return;
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('audio/')) {
+        await handleBrowserAudioFile(file);
+      }
     });
   }
 
