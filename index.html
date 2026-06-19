@@ -1434,21 +1434,6 @@
       transform: translateY(0);
     }
 
-    .strip-format {
-      position: relative;
-      z-index: 1;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 8.5px;
-      color: rgba(222, 201, 246, 0.82);
-      text-transform: none;
-      letter-spacing: 0.04em;
-      flex-shrink: 0;
-      max-width: 120px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
     .strip-check {
       position: absolute;
       top: 5px;
@@ -1682,14 +1667,6 @@
       text-overflow: ellipsis;
     }
 
-    .strain-rack.view-grid .strip-format {
-      font-size: 6.5px;
-      max-width: 160px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
     @keyframes cardIn {
       from { opacity: 0; transform: translateY(14px) scale(0.93); }
       to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -1817,8 +1794,8 @@
         overflow: auto;
       }
     }
-    /* ── PRO Upsell Modal ── */
-    .pro-modal-overlay {
+    /* ── Preview Modal ── */
+    .preview-modal-overlay {
       position: fixed;
       inset: 0;
       z-index: 9999;
@@ -1829,12 +1806,12 @@
       backdrop-filter: blur(14px);
       animation: modalFadeIn 0.3s ease both;
     }
-    .pro-modal-overlay.active { display: grid; }
+    .preview-modal-overlay.active { display: grid; }
     @keyframes modalFadeIn {
       from { opacity: 0; }
       to { opacity: 1; }
     }
-    .pro-modal {
+    .preview-modal {
       width: min(92vw, 520px);
       max-height: 90vh;
       border-radius: 20px;
@@ -1850,7 +1827,7 @@
       from { opacity: 0; transform: translateY(30px) scale(0.96); }
       to { opacity: 1; transform: translateY(0) scale(1); }
     }
-    .pro-modal-close {
+    .preview-modal-close {
       position: absolute;
       top: 12px;
       right: 12px;
@@ -1866,11 +1843,11 @@
       place-items: center;
       transition: background 0.2s, color 0.2s;
     }
-    .pro-modal-close:hover {
+    .preview-modal-close:hover {
       background: rgba(239,87,87,0.5);
       color: #fff;
     }
-    .pro-modal-close svg { width: 16px; height: 16px; }
+    .preview-modal-close svg { width: 16px; height: 16px; }
 
     /* Syrup visualization — top 60% */
     .pro-syrup {
@@ -1977,7 +1954,7 @@
     }
 
     /* Modal content — bottom 40% */
-    .pro-modal-body {
+    .preview-modal-body {
       padding: 16px 20px 20px;
       display: flex;
       flex-direction: column;
@@ -2056,6 +2033,129 @@
       color: var(--muted);
       min-width: 38px;
       text-align: right;
+    }
+
+    /* Preview CTA */
+    .preview-cta {
+      width: 100%;
+      padding: 12px;
+      border: 0;
+      border-radius: 12px;
+      font-family: 'Sora', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .preview-cta.select-cta {
+      background: linear-gradient(135deg, var(--teal), #1a9e8f);
+      color: #061117;
+      box-shadow: 0 8px 24px rgba(0, 200, 180, 0.25);
+    }
+    .preview-cta.select-cta:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 32px rgba(0, 200, 180, 0.35);
+    }
+    .preview-cta.pro-cta-style {
+      background: linear-gradient(135deg, #b58cff, #d780ff);
+      color: #061117;
+      box-shadow: 0 8px 24px rgba(176, 124, 255, 0.25);
+    }
+    .preview-cta.pro-cta-style:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 32px rgba(176, 124, 255, 0.35);
+    }
+    .preview-cta-sub {
+      display: block;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 8px;
+      font-weight: 400;
+      opacity: 0.6;
+      letter-spacing: 0.04em;
+      margin-top: 2px;
+    }
+
+    /* ── PRO Upsell Modal ── */
+    .pro-upsell-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: none;
+      place-items: center;
+      background: rgba(8, 3, 14, 0.85);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
+      animation: modalFadeIn 0.3s ease both;
+    }
+    .pro-upsell-overlay.active { display: grid; }
+    .pro-upsell {
+      width: min(92vw, 480px);
+      max-height: 90vh;
+      border-radius: 20px;
+      background: linear-gradient(170deg, #1a0c28, #0f0718);
+      border: 1px solid rgba(190, 124, 255, 0.25);
+      box-shadow: 0 30px 80px rgba(0,0,0,0.7);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      animation: modalSlide 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+      padding: 24px;
+    }
+    .pro-upsell-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 20;
+      width: 32px;
+      height: 32px;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.45);
+      color: rgba(255,255,255,0.7);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      transition: background 0.2s, color 0.2s;
+    }
+    .pro-upsell-close:hover {
+      background: rgba(239,87,87,0.5);
+      color: #fff;
+    }
+    .pro-upsell-close svg { width: 16px; height: 16px; }
+    .pro-upsell-syrup {
+      height: 120px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      overflow: hidden;
+      position: relative;
+      background:
+        radial-gradient(ellipse at 30% 20%, rgba(140, 60, 255, 0.35), transparent 50%),
+        radial-gradient(ellipse at 70% 10%, rgba(200, 100, 255, 0.25), transparent 40%),
+        linear-gradient(175deg, #2a1040, #160828 40%, #0c0418 80%);
+    }
+    .pro-upsell-badge {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 36px;
+      color: rgba(255,255,255,0.9);
+      text-shadow: 0 4px 20px rgba(0,0,0,0.8), 0 0 40px rgba(140, 60, 255, 0.3);
+      letter-spacing: 0.08em;
+    }
+    .pro-upsell-body {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .pro-upsell-title {
+      font-family: 'Sora', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--txt-strong);
+      text-align: center;
     }
 
     /* PRO info */
@@ -2309,23 +2409,23 @@
     </section>
   </main>
 
-  <!-- PRO Upsell Modal -->
-  <div class="pro-modal-overlay" id="pro-modal">
-    <div class="pro-modal">
-      <button class="pro-modal-close" id="pro-modal-close" aria-label="Close">
+  <!-- Preview Modal -->
+  <div class="preview-modal-overlay" id="preview-modal">
+    <div class="preview-modal" style="position:relative">
+      <button class="preview-modal-close" id="preview-modal-close" aria-label="Close">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M6 18L18 6"/></svg>
       </button>
-      <div class="pro-syrup" id="pro-syrup">
+      <div class="pro-syrup" id="preview-syrup">
         <div class="pro-syrup-blob"></div>
         <div class="pro-syrup-blob"></div>
         <div class="pro-syrup-blob"></div>
         <div class="pro-syrup-glass"></div>
         <div class="pro-syrup-label">
-          <div class="pro-syrup-strain" id="pro-strain-name">Wock Purple</div>
-          <div class="pro-syrup-sub">Premium Strain &bull; PRO Exclusive</div>
+          <div class="pro-syrup-strain" id="preview-strain-name">Wock Purple</div>
+          <div class="pro-syrup-sub" id="preview-strain-sub">Premium Strain</div>
         </div>
       </div>
-      <div class="pro-modal-body">
+      <div class="preview-modal-body">
         <div class="ab-player" id="ab-player">
           <div class="ab-toggles">
             <button class="ab-btn active" id="ab-a" data-side="a">
@@ -2334,7 +2434,7 @@
             </button>
             <button class="ab-btn" id="ab-b" data-side="b">
               <span class="ab-label">B</span>
-              <span class="ab-desc" id="ab-b-desc">PRO Preview</span>
+              <span class="ab-desc" id="ab-b-desc">Processed</span>
             </button>
           </div>
           <div class="ab-controls">
@@ -2349,7 +2449,28 @@
             </div>
           </div>
         </div>
+        <button class="preview-cta select-cta" id="preview-cta">
+          <span id="preview-cta-text">Select Strain</span>
+          <span class="preview-cta-sub" id="preview-cta-sub">Click to add to your selection</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
+  <!-- PRO Upsell Modal -->
+  <div class="pro-upsell-overlay" id="pro-upsell">
+    <div class="pro-upsell" style="position:relative">
+      <button class="pro-upsell-close" id="pro-upsell-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M6 18L18 6"/></svg>
+      </button>
+      <div class="pro-upsell-syrup">
+        <div class="pro-syrup-blob"></div>
+        <div class="pro-syrup-blob"></div>
+        <div class="pro-syrup-blob"></div>
+        <div class="pro-upsell-badge">PRO</div>
+      </div>
+      <div class="pro-upsell-body">
+        <div class="pro-upsell-title">Unlock Every Strain</div>
         <div class="pro-info">
           <div class="pro-features">
             <span class="pro-feature"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>All 120+ PRO strains</span>
@@ -2362,7 +2483,6 @@
             <span>"Best screw tool on the market" — 2,418 reviews</span>
           </div>
         </div>
-
         <div class="pro-fomo">
           <div class="pro-fomo-timer">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -2372,7 +2492,6 @@
             🔥 <strong id="pro-joined">847</strong> producers joined today
           </div>
         </div>
-
         <button class="pro-cta" id="pro-cta">
           Unlock PRO — $19.99
           <span class="pro-cta-sub">One-time payment &bull; Lifetime access &bull; Free updates</span>

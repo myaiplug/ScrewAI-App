@@ -529,11 +529,12 @@
 
 
 
-  // PRO Modal event listeners
-  document.getElementById('pro-modal-close').addEventListener('click', closeProModal);
-  document.getElementById('pro-modal').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) closeProModal();
+  // Preview Modal event listeners
+  document.getElementById('preview-modal-close').addEventListener('click', closePreviewModal);
+  document.getElementById('preview-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closePreviewModal();
   });
+  document.getElementById('preview-cta').addEventListener('click', handlePreviewCta);
   document.getElementById('ab-a').addEventListener('click', () => toggleAbSide('a'));
   document.getElementById('ab-b').addEventListener('click', () => toggleAbSide('b'));
   document.getElementById('ab-play').addEventListener('click', () => {
@@ -552,9 +553,14 @@
         `${Math.floor(proModalPauseTime / 60)}:${String(Math.floor(proModalPauseTime) % 60).padStart(2, '0')}`;
     }
   });
+
+  // PRO Upsell event listeners
+  document.getElementById('pro-upsell-close').addEventListener('click', closeProUpsell);
+  document.getElementById('pro-upsell').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeProUpsell();
+  });
   document.getElementById('pro-cta').addEventListener('click', () => {
-    closeProModal();
-    // Redirect or show payment modal (placeholder)
+    closeProUpsell();
     currentStrain.textContent = 'PRO unlock coming soon — stay tuned!';
   });
 
@@ -847,25 +853,6 @@
     return chosen;
   }
 
-  function formatWaEffects(strain) {
-    const profile = getWaProfile(strain.name);
-    if (!profile) return '';
-    const parts = [];
-    if (profile.slowdown && profile.slowdown !== 1) parts.push(`${Math.round(profile.slowdown * 100)}%`);
-    if (profile.eq && profile.eq.length > 0) {
-      const bands = profile.eq.map(e => `${Math.round(e[0])}hz${e[1] > 0 ? '+' : ''}${e[1]}dB`).join(' ');
-      parts.push(bands);
-    }
-    if (profile.tremolo) parts.push(`trem:${profile.tremolo[0]}hz/${profile.tremolo[1]}d`);
-    if (profile.vibrato) parts.push(`vib:${profile.vibrato[0]}hz/${profile.vibrato[1]}d`);
-    if (profile.phaser) parts.push(`phaser:${profile.phaser[0]}hz/${profile.phaser[1]}d`);
-    if (profile.echo) parts.push(`echo:${profile.echo[0]}s/${profile.echo[1]}fb`);
-    if (profile.stereoWiden && profile.stereoWiden !== 1) parts.push(`wide:${profile.stereoWiden}x`);
-    if (profile.highpass >= 28 && profile.highpass > 28) parts.push(`hp:${profile.highpass}hz`);
-    if (profile.lowpass && profile.lowpass < 18500) parts.push(`lp:${profile.lowpass}hz`);
-    return parts.join(' · ');
-  }
-
   // Render Strains
   function renderStrains() {
     const visibleStrains = strains
@@ -917,8 +904,7 @@
         </div>
         <div class="strip-light"></div>
         <div class="strip-icon">${strainIcons[strain.icon] || strainIcons.default}</div>
-        <div class="strip-name">${strain.name}</div>
-        <div class="strip-format" title="${formatWaEffects(strain)}">${formatWaEffects(strain)}</div>
+        <div class="strip-name">${strain.name}</div>
         ${isPro ? `<div class="pro-lock-badge"><svg class="pro-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span class="pro-lock-label">PRO</span></div>` : ''}
         <div class="strip-check">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -940,46 +926,52 @@
   // Toggle Strain Selection
   function toggleStrain(index) {
     if (isProcessing) return;
-    if (strains[index] && strains[index].tier === 'pro') {
-      openProModal(strains[index]);
-      return;
-    }
-    
-    const card = document.querySelector(`.strain-strip[data-index="${index}"]`);
-    if (selectedStrains.has(index)) {
-      selectedStrains.delete(index);
-      card.classList.remove('selected');
-    } else {
-      selectedStrains.add(index);
-      card.classList.add('selected');
-    }
-    updateSelectedCount();
-    updateProcessButton();
+    openPreviewModal(index);
   }
 
-  // ── PRO Upsell Modal ──
-  let proModalAudioCtx = null;
-  let proModalSource = null;
-  let proModalBuffer = null;
-  let proModalIsPlaying = false;
-  let proModalStartTime = 0;
-  let proModalPauseTime = 0;
-  let proModalCurrentSide = 'a'; // 'a' = original, 'b' = pro preview
-  let proModalRaf = null;
-  let proModalTimerInterval = null;
-  let proModalProBuffer = null; // pre-rendered PRO preview buffer
-  let proModalSegmentStart = 0;
-  let proModalSegmentDuration = 10;
+  // ── Preview Modal ──
+  let previewStrainIndex = null;
+  let previewAudioCtx = null;
+  let previewSource = null;
+  let previewBuffer = null;
+  let previewIsPlaying = false;
+  let previewStartTime = 0;
+  let previewPauseTime = 0;
+  let previewCurrentSide = 'a';
+  let previewRaf = null;
+  let previewProBuffer = null;
+  let previewSegmentStart = 0;
+  let previewSegmentDuration = 10;
 
-  function openProModal(strain) {
-    const overlay = document.getElementById('pro-modal');
+  function openPreviewModal(index) {
+    const strain = strains[index];
+    if (!strain) return;
+    previewStrainIndex = index;
+
+    const overlay = document.getElementById('preview-modal');
     if (!overlay) return;
 
-    document.getElementById('pro-strain-name').textContent = strain.name;
+    document.getElementById('preview-strain-name').textContent = strain.name;
     document.getElementById('ab-b-desc').textContent = `${strain.name} Preview`;
 
+    const isPro = strain.tier === 'pro';
+    document.getElementById('preview-strain-sub').textContent = isPro ? 'Premium Strain \u2022 PRO Exclusive' : 'Free Strain';
+    const cta = document.getElementById('preview-cta');
+    const ctaText = document.getElementById('preview-cta-text');
+    const ctaSub = document.getElementById('preview-cta-sub');
+    if (isPro) {
+      cta.className = 'preview-cta pro-cta-style';
+      ctaText.textContent = 'Unlock PRO';
+      ctaSub.textContent = 'One-time payment \u2022 Lifetime access \u2022 Free updates';
+    } else {
+      const alreadySelected = selectedStrains.has(index);
+      cta.className = 'preview-cta select-cta';
+      ctaText.textContent = alreadySelected ? 'Deselect Strain' : 'Select Strain';
+      ctaSub.textContent = alreadySelected ? 'Remove from your selection' : 'Click to add to your selection';
+    }
+
     // Generate bubbles in syrup
-    const syrup = document.getElementById('pro-syrup');
+    const syrup = document.getElementById('preview-syrup');
     syrup.querySelectorAll('.pro-syrup-bubble-custom').forEach(el => el.remove());
     for (let i = 0; i < 18; i++) {
       const b = document.createElement('div');
@@ -995,19 +987,71 @@
     if (browserAudioBuffer) {
       setupAbPreview(strain);
     }
+  }
+
+  function closePreviewModal() {
+    document.getElementById('preview-modal').classList.remove('active');
+    stopAbPlayback();
+    previewStrainIndex = null;
+  }
+
+  function handlePreviewCta() {
+    if (previewStrainIndex === null) return;
+    const strain = strains[previewStrainIndex];
+    if (!strain) return;
+
+    if (strain.tier === 'pro') {
+      closePreviewModal();
+      openProUpsell();
+    } else {
+      const index = previewStrainIndex;
+      const card = document.querySelector(`.strain-strip[data-index="${index}"]`);
+      if (selectedStrains.has(index)) {
+        selectedStrains.delete(index);
+        if (card) card.classList.remove('selected');
+      } else {
+        selectedStrains.add(index);
+        if (card) card.classList.add('selected');
+      }
+      updateSelectedCount();
+      updateProcessButton();
+      closePreviewModal();
+    }
+  }
+
+  // ── PRO Upsell Modal ──
+  let proUpsellTimerInterval = null;
+  let proUpsellJoinInterval = null;
+
+  function openProUpsell() {
+    const overlay = document.getElementById('pro-upsell');
+    if (!overlay) return;
+    overlay.classList.add('active');
 
     // Start FOMO timer
     startFomoTimer();
-
     // Animate join count
     animateJoinCount();
   }
 
-  function closeProModal() {
-    document.getElementById('pro-modal').classList.remove('active');
-    stopAbPlayback();
-    if (proModalTimerInterval) { clearInterval(proModalTimerInterval); proModalTimerInterval = null; }
+  function closeProUpsell() {
+    document.getElementById('pro-upsell').classList.remove('active');
+    if (proUpsellTimerInterval) { clearInterval(proUpsellTimerInterval); proUpsellTimerInterval = null; }
+    if (proUpsellJoinInterval) { clearInterval(proUpsellJoinInterval); proUpsellJoinInterval = null; }
   }
+
+  // ── Shared A/B Preview Functions ──
+  let proModalBuffer = null;
+  let proModalProBuffer = null;
+  let proModalCurrentSide = 'a';
+  let proModalIsPlaying = false;
+  let proModalAudioCtx = null;
+  let proModalSource = null;
+  let proModalStartTime = 0;
+  let proModalPauseTime = 0;
+  let proModalRaf = null;
+  let proModalSegmentStart = 0;
+  let proModalSegmentDuration = 10;
 
   function setupAbPreview(strain) {
     const buf = browserAudioBuffer;
@@ -1117,7 +1161,7 @@
   }
 
   function startFomoTimer() {
-    if (proModalTimerInterval) clearInterval(proModalTimerInterval);
+    if (proUpsellTimerInterval) clearInterval(proUpsellTimerInterval);
     let mins = 14;
     let secs = Math.floor(32 + Math.random() * 120);
     if (secs >= 60) { mins += Math.floor(secs / 60); secs = secs % 60; }
@@ -1129,7 +1173,7 @@
         `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     };
     update();
-    proModalTimerInterval = setInterval(update, 1000);
+    proUpsellTimerInterval = setInterval(update, 1000);
   }
 
   function animateJoinCount() {
@@ -1140,14 +1184,14 @@
       current += Math.floor(Math.random() * 3) + 1;
       el.textContent = current.toLocaleString();
     }, 3000 + Math.random() * 4000);
-    // clean up when modal closes — watch for modal close
+    proUpsellJoinInterval = interval;
     const observer = new MutationObserver(() => {
-      if (!document.getElementById('pro-modal').classList.contains('active')) {
+      if (!document.getElementById('pro-upsell').classList.contains('active')) {
         clearInterval(interval);
         observer.disconnect();
       }
     });
-    observer.observe(document.getElementById('pro-modal'), { attributes: true, attributeFilter: ['class'] });
+    observer.observe(document.getElementById('pro-upsell'), { attributes: true, attributeFilter: ['class'] });
   }
 
   // Update Selected Count
