@@ -1005,7 +1005,13 @@
 
     if (strain.tier === 'pro') {
       closePreviewModal();
-      openProUpsell();
+      const card = document.querySelector(`.strain-strip[data-index="${previewStrainIndex}"]`);
+      let color = '#7C3AED';
+      if (card) {
+        const cs = getComputedStyle(card);
+        color = cs.getPropertyValue('--strain-color').trim() || color;
+      }
+      openProUpsell(color);
     } else {
       const index = previewStrainIndex;
       const card = document.querySelector(`.strain-strip[data-index="${index}"]`);
@@ -1023,24 +1029,52 @@
   }
 
   // ── PRO Upsell Modal ──
-  let proUpsellTimerInterval = null;
-  let proUpsellJoinInterval = null;
 
-  function openProUpsell() {
+  function openProUpsell(strainColor) {
     const overlay = document.getElementById('pro-upsell');
     if (!overlay) return;
-    overlay.classList.add('active');
 
-    // Start FOMO timer
-    startFomoTimer();
-    // Animate join count
-    animateJoinCount();
+    // Set dynamic syrup color to match the strain
+    const syrup = document.getElementById('pro-upsell-syrup');
+    if (syrup && strainColor) {
+      // Parse the hex color and create rgba variants
+      const r = parseInt(strainColor.slice(1,3), 16);
+      const g = parseInt(strainColor.slice(3,5), 16);
+      const b = parseInt(strainColor.slice(5,7), 16);
+      syrup.style.setProperty('--syrup-color1', `rgba(${r},${g},${b},0.35)`);
+      syrup.style.setProperty('--syrup-color2', `rgba(${r+40},${g+20},${b+60},0.25)`);
+      syrup.style.setProperty('--syrup-color3', `rgba(${r-30},${g-10},${b-50},0.5)`);
+      // Update syrup background
+      syrup.style.background = `
+        radial-gradient(ellipse at 30% 20%, var(--syrup-color1), transparent 50%),
+        radial-gradient(ellipse at 70% 10%, var(--syrup-color2), transparent 40%),
+        radial-gradient(ellipse at 50% 80%, var(--syrup-color3), transparent 50%),
+        linear-gradient(175deg, #2a1040, #160828 40%, #0c0418 80%)
+      `;
+      // Color the blobs
+      const blobs = syrup.querySelectorAll('.pro-syrup-blob');
+      if (blobs[0]) blobs[0].style.background = `radial-gradient(circle, rgba(${r+40},${g+20},${b+60},0.4), rgba(${r-20},${g},${b-30},0.2))`;
+      if (blobs[1]) blobs[1].style.background = `radial-gradient(circle, rgba(${r+80},${g+40},${b+80},0.35), rgba(${r+10},${g+10},${b+10},0.15))`;
+      if (blobs[2]) blobs[2].style.background = `radial-gradient(circle, rgba(${r},${g-10},${b-40},0.3), rgba(${r-40},${g-20},${b-60},0.2))`;
+    }
+
+    // Generate bubbles
+    if (syrup) {
+      syrup.querySelectorAll('.pro-syrup-bubble-custom').forEach(el => el.remove());
+      for (let i = 0; i < 14; i++) {
+        const b = document.createElement('div');
+        b.className = 'pro-syrup-bubble pro-syrup-bubble-custom';
+        const size = 4 + Math.random() * 14;
+        b.style.cssText = `width:${size}px;height:${size}px;left:${5 + Math.random() * 90}%;bottom:-${5 + Math.random() * 10}%;--dur:${5 + Math.random() * 6}s;--delay:${Math.random() * 4}s;--drift:${(Math.random() - 0.5) * 40}px`;
+        syrup.appendChild(b);
+      }
+    }
+
+    overlay.classList.add('active');
   }
 
   function closeProUpsell() {
     document.getElementById('pro-upsell').classList.remove('active');
-    if (proUpsellTimerInterval) { clearInterval(proUpsellTimerInterval); proUpsellTimerInterval = null; }
-    if (proUpsellJoinInterval) { clearInterval(proUpsellJoinInterval); proUpsellJoinInterval = null; }
   }
 
   // ── Shared A/B Preview Functions ──
@@ -1161,40 +1195,6 @@
       return;
     }
     proModalRaf = requestAnimationFrame(updateAbProgress);
-  }
-
-  function startFomoTimer() {
-    if (proUpsellTimerInterval) clearInterval(proUpsellTimerInterval);
-    let mins = 14;
-    let secs = Math.floor(32 + Math.random() * 120);
-    if (secs >= 60) { mins += Math.floor(secs / 60); secs = secs % 60; }
-    const update = () => {
-      if (secs <= 0 && mins <= 0) { secs = 59; mins = 14; }
-      if (secs <= 0) { mins--; secs = 59; }
-      secs--;
-      document.getElementById('pro-timer').textContent =
-        `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    };
-    update();
-    proUpsellTimerInterval = setInterval(update, 1000);
-  }
-
-  function animateJoinCount() {
-    const el = document.getElementById('pro-joined');
-    const base = parseInt(el.textContent.replace(/,/g, '')) || 847;
-    let current = base;
-    const interval = setInterval(() => {
-      current += Math.floor(Math.random() * 3) + 1;
-      el.textContent = current.toLocaleString();
-    }, 3000 + Math.random() * 4000);
-    proUpsellJoinInterval = interval;
-    const observer = new MutationObserver(() => {
-      if (!document.getElementById('pro-upsell').classList.contains('active')) {
-        clearInterval(interval);
-        observer.disconnect();
-      }
-    });
-    observer.observe(document.getElementById('pro-upsell'), { attributes: true, attributeFilter: ['class'] });
   }
 
   // Update Selected Count

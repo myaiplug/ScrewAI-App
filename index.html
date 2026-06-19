@@ -2069,6 +2069,26 @@
       text-align: right;
     }
 
+    /* PRO reviews */
+    .pro-review {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .pro-review-row {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      font-size: 8.5px;
+      color: var(--muted);
+      line-height: 1.3;
+    }
+    .pro-stars { color: #f59e0b; letter-spacing: 2px; font-size: 10px; flex-shrink: 0; }
+    .pro-review-text {
+      font-style: italic;
+      opacity: 0.85;
+    }
+
     /* Preview CTA */
     .preview-cta {
       width: 100%;
@@ -2157,28 +2177,6 @@
       color: #fff;
     }
     .pro-upsell-close svg { width: 16px; height: 16px; }
-    .pro-upsell-syrup {
-      height: 120px;
-      border-radius: 12px;
-      margin-bottom: 16px;
-      overflow: hidden;
-      position: relative;
-      background:
-        radial-gradient(ellipse at 30% 20%, rgba(140, 60, 255, 0.35), transparent 50%),
-        radial-gradient(ellipse at 70% 10%, rgba(200, 100, 255, 0.25), transparent 40%),
-        linear-gradient(175deg, #2a1040, #160828 40%, #0c0418 80%);
-    }
-    .pro-upsell-badge {
-      position: absolute;
-      bottom: 16px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 36px;
-      color: rgba(255,255,255,0.9);
-      text-shadow: 0 4px 20px rgba(0,0,0,0.8), 0 0 40px rgba(140, 60, 255, 0.3);
-      letter-spacing: 0.08em;
-    }
     .pro-upsell-body {
       display: flex;
       flex-direction: column;
@@ -2192,69 +2190,7 @@
       text-align: center;
     }
 
-    /* PRO info */
-    .pro-info {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .pro-features {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 4px;
-    }
-    .pro-feature {
-      font-size: 9px;
-      color: var(--txt);
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
-    .pro-feature svg {
-      width: 10px;
-      height: 10px;
-      color: var(--lime);
-      flex-shrink: 0;
-    }
-    .pro-rating {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 9px;
-      color: var(--muted);
-    }
-    .pro-stars { color: #f59e0b; letter-spacing: 2px; font-size: 11px; }
-
-    /* FOMO section */
-    .pro-fomo {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
-      border-radius: 10px;
-      background: rgba(239, 87, 87, 0.08);
-      border: 1px solid rgba(239, 87, 87, 0.15);
-    }
-    .pro-fomo-timer {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--amber);
-    }
-    .pro-fomo-timer svg { width: 14px; height: 14px; }
-    .pro-fomo-social {
-      font-size: 8px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-    .pro-fomo-social strong { color: var(--lime); }
-
-    /* CTA */
-    .pro-cta {
+    @keyframes bubbleRise {
       width: 100%;
       padding: 12px;
       border: 0;
@@ -2497,14 +2433,18 @@
       <button class="pro-upsell-close" id="pro-upsell-close" aria-label="Close">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M6 18L18 6"/></svg>
       </button>
-      <div class="pro-upsell-syrup">
+      <div class="pro-syrup" id="pro-upsell-syrup" style="--syrup-color1:rgba(140,60,255,0.35);--syrup-color2:rgba(200,100,255,0.25);--syrup-color3:rgba(80,20,160,0.5);height:200px;min-height:200px">
         <div class="pro-syrup-blob"></div>
         <div class="pro-syrup-blob"></div>
         <div class="pro-syrup-blob"></div>
-        <div class="pro-upsell-badge">PRO</div>
+        <div class="pro-syrup-glass"></div>
+        <div class="pro-syrup-label">
+          <div class="pro-syrup-strain" id="pro-upsell-strain">PRO</div>
+          <div class="pro-syrup-sub">Unlock every strain</div>
+        </div>
       </div>
       <div class="pro-upsell-body">
-        <div class="pro-upsell-title">Unlock Every Strain</div>
+        <div class="pro-upsell-title">Go PRO</div>
         <div class="pro-info">
           <div class="pro-features">
             <span class="pro-feature"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>All 120+ PRO strains</span>
@@ -2512,18 +2452,19 @@
             <span class="pro-feature"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>WAV + MP3 output</span>
             <span class="pro-feature"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Priority updates</span>
           </div>
-          <div class="pro-rating">
-            <span class="pro-stars">★★★★★</span>
-            <span>"Best screw tool on the market" — 2,418 reviews</span>
-          </div>
-        </div>
-        <div class="pro-fomo">
-          <div class="pro-fomo-timer">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <span id="pro-timer">14:32</span>
-          </div>
-          <div class="pro-fomo-social">
-            🔥 <strong id="pro-joined">847</strong> producers joined today
+          <div class="pro-review">
+            <div class="pro-review-row">
+              <span class="pro-stars">★★★★★</span>
+              <span class="pro-review-text">"Night and day difference. My tracks finally hit how I imagined."</span>
+            </div>
+            <div class="pro-review-row">
+              <span class="pro-stars">★★★★★</span>
+              <span class="pro-review-text">"Tried every screw tool out there. This is the only one that sounds right."</span>
+            </div>
+            <div class="pro-review-row">
+              <span class="pro-stars">★★★★★</span>
+              <span class="pro-review-text">"Batch processing saves me hours. Game changer for my workflow."</span>
+            </div>
           </div>
         </div>
         <button class="pro-cta" id="pro-cta">
