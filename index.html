@@ -171,7 +171,7 @@
       right: -28px;
       width: min(34vw, 420px);
       height: min(54vh, 510px);
-      background: url('../screw_hero.png') no-repeat top right / contain;
+      background: url('./screw_hero.png') no-repeat top right / contain;
       opacity: 0.22;
       pointer-events: none;
       z-index: 1;
@@ -1683,7 +1683,11 @@
     }
 
     .strain-rack.view-grid .strip-format {
-      display: none;
+      font-size: 6.5px;
+      max-width: 160px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     @keyframes cardIn {

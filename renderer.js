@@ -847,6 +847,25 @@
     return chosen;
   }
 
+  function formatWaEffects(strain) {
+    const profile = getWaProfile(strain.name);
+    if (!profile) return '';
+    const parts = [];
+    if (profile.slowdown && profile.slowdown !== 1) parts.push(`${Math.round(profile.slowdown * 100)}%`);
+    if (profile.eq && profile.eq.length > 0) {
+      const bands = profile.eq.map(e => `${Math.round(e[0])}hz${e[1] > 0 ? '+' : ''}${e[1]}dB`).join(' ');
+      parts.push(bands);
+    }
+    if (profile.tremolo) parts.push(`trem:${profile.tremolo[0]}hz/${profile.tremolo[1]}d`);
+    if (profile.vibrato) parts.push(`vib:${profile.vibrato[0]}hz/${profile.vibrato[1]}d`);
+    if (profile.phaser) parts.push(`phaser:${profile.phaser[0]}hz/${profile.phaser[1]}d`);
+    if (profile.echo) parts.push(`echo:${profile.echo[0]}s/${profile.echo[1]}fb`);
+    if (profile.stereoWiden && profile.stereoWiden !== 1) parts.push(`wide:${profile.stereoWiden}x`);
+    if (profile.highpass >= 28 && profile.highpass > 28) parts.push(`hp:${profile.highpass}hz`);
+    if (profile.lowpass && profile.lowpass < 18500) parts.push(`lp:${profile.lowpass}hz`);
+    return parts.join(' · ');
+  }
+
   // Render Strains
   function renderStrains() {
     const visibleStrains = strains
@@ -899,7 +918,7 @@
         <div class="strip-light"></div>
         <div class="strip-icon">${strainIcons[strain.icon] || strainIcons.default}</div>
         <div class="strip-name">${strain.name}</div>
-        <div class="strip-format">${strain.name}</div>
+        <div class="strip-format" title="${formatWaEffects(strain)}">${formatWaEffects(strain)}</div>
         ${isPro ? `<div class="pro-lock-badge"><svg class="pro-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span class="pro-lock-label">PRO</span></div>` : ''}
         <div class="strip-check">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
