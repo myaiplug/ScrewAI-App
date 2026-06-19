@@ -560,8 +560,9 @@
     if (e.target === e.currentTarget) closeProUpsell();
   });
   document.getElementById('pro-cta').addEventListener('click', () => {
-    closeProUpsell();
-    window.open('https://buy.stripe.com/eVq8wPdqSdb63hugmoffy01', '_blank');
+    const url = 'https://buy.stripe.com/eVq8wPdqSdb63hugmoffy01';
+    const w = window.open(url, '_blank');
+    if (!w) { window.location.href = url; }
   });
 
   // Initialize

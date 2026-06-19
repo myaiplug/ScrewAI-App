@@ -2191,6 +2191,35 @@
     }
 
     @keyframes bubbleRise {
+      0% { transform: translateY(0) translateX(0) scale(0.6); opacity: 0; }
+      10% { opacity: 0.7; }
+      90% { opacity: 0.4; }
+      100% { transform: translateY(-320px) translateX(var(--drift, 20px)) scale(1); opacity: 0; }
+    }
+    .pro-info {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .pro-features {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+    }
+    .pro-feature {
+      font-size: 9px;
+      color: var(--txt);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .pro-feature svg {
+      width: 10px;
+      height: 10px;
+      color: var(--lime);
+      flex-shrink: 0;
+    }
+    .pro-cta {
       width: 100%;
       padding: 12px;
       border: 0;
