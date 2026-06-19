@@ -561,7 +561,7 @@
   });
   document.getElementById('pro-cta').addEventListener('click', () => {
     closeProUpsell();
-    currentStrain.textContent = 'PRO unlock coming soon — stay tuned!';
+    window.open('https://buy.stripe.com/eVq8wPdqSdb63hugmoffy01', '_blank');
   });
 
   // Initialize
@@ -882,7 +882,9 @@
           ? ' strip-label-img-image-large'
           : '';
         const isPro = strain.tier === 'pro';
-        return `<div class="strain-strip${selectedStrains.has(index) ? ' selected' : ''}${isPro ? ' pro-locked' : ''}" data-index="${index}" style="--strain-color: ${nonAdjacentColors[visualOrder]}; --strip-order: ${visualOrder}; --fill-base: ${bottleProfile.baseFill}%; --fill-hover: ${bottleProfile.hoverFill}%; --fill-selected: ${bottleProfile.selectedFill}%">
+        const waProfile = getWaProfile(strain.name);
+        const slowdownPct = waProfile && waProfile.slowdown ? Math.round((1 - waProfile.slowdown) * 100) : 0;
+        return `<div class="strain-strip${selectedStrains.has(index) ? ' selected' : ''}${isPro ? ' pro-locked' : ''}" data-index="${index}" data-slowdown="${slowdownPct}" style="--strain-color: ${nonAdjacentColors[visualOrder]}; --strip-order: ${visualOrder}; --fill-base: ${bottleProfile.baseFill}%; --fill-hover: ${bottleProfile.hoverFill}%; --fill-selected: ${bottleProfile.selectedFill}%">
         <div class="strip-cap">
           <span class="strip-cap-ridges"></span>
         </div>
@@ -904,7 +906,8 @@
         </div>
         <div class="strip-light"></div>
         <div class="strip-icon">${strainIcons[strain.icon] || strainIcons.default}</div>
-        <div class="strip-name">${strain.name}</div>
+        <div class="strip-name">${strain.name}</div>
+        <div class="strip-slowdown">${slowdownPct}%</div>
         ${isPro ? `<div class="pro-lock-badge"><svg class="pro-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span class="pro-lock-label">PRO</span></div>` : ''}
         <div class="strip-check">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
