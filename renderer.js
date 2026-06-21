@@ -18,6 +18,12 @@
   let browserAudioFile = null; // File object for browser mode
   let browserAudioBuffer = null; // decoded AudioBuffer for browser mode
   let isBrowser = false; // true when running outside Electron
+  let isPro = localStorage.getItem('screwai_pro') === 'true';
+  let wasDragged = false;
+  let platformName = 'Web';
+
+  const FREE_SELECTION_LIMIT = 1;
+  const PRO_SELECTION_LIMIT = 10;
 
   // ── Web Audio Effect Profiles ──
   const WA = {
@@ -212,7 +218,7 @@
       try {
         const profile = getWaProfile(strain.name);
         const outputBuffer = await renderWaChain(audioBuffer, profile);
-        const blob = audioBufferToWavBlob(outputBuffer);
+        const blob = audioBufferToWavBlob(outputBuffer, strain.name);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -400,7 +406,7 @@
     return ctx.startRendering();
   }
 
-  function audioBufferToWavBlob(audioBuffer) {
+  function audioBufferToWavBlob(audioBuffer, strainName) {
     const numChannels = audioBuffer.numberOfChannels;
     const sampleRate = audioBuffer.sampleRate;
     const format = 1; // PCM
@@ -412,33 +418,62 @@
       data.push(audioBuffer.getChannelData(ch));
     }
     const length = data[0].length;
-    const buffer = new ArrayBuffer(44 + length * blockAlign);
-    const view = new DataView(buffer);
+    const dataSize = length * blockAlign;
 
-    function writeString(offset, str) {
+    // Build metadata
+    const platform = platformName || 'Web';
+    const artist = `Screwed by ScrewAI ${platform}`;
+    const comment = `Produced with ScrewAI Pro. Stem separation: https://liminal-stemsplit.onrender.com/ | ScrewAI: https://myaiplug.github.io/ScrewAI-App/`;
+
+    function writeStr(view, offset, str) {
       for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
     }
-    writeString(0, 'RIFF');
-    view.setUint32(4, 36 + length * blockAlign, true);
-    writeString(8, 'WAVE');
-    writeString(12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, format, true);
-    view.setUint16(22, numChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * blockAlign, true);
-    view.setUint16(32, blockAlign, true);
-    view.setUint16(34, bitDepth, true);
-    writeString(36, 'data');
-    view.setUint32(40, length * blockAlign, true);
+    function paddedLen(str) { return str.length + (str.length % 2); }
 
-    let offset = 44;
+    // LIST INFO chunk
+    const iart = 'IART' + String.fromCharCode(0) + artist.length + 1;
+    const icmt = 'ICMT' + String.fromCharCode(0) + comment.length + 1;
+    const listInfoSize = 4 + 4 + 4 + paddedLen(iart) + paddedLen(icmt);
+    const fmtSize = 16;
+    const riffSize = 4 + (8 + fmtSize) + (8 + listInfoSize) + (8 + dataSize);
+    const totalSize = 8 + (8 + fmtSize) + (8 + listInfoSize) + (8 + dataSize);
+
+    const buffer = new ArrayBuffer(totalSize);
+    const view = new DataView(buffer);
+
+    let off = 0;
+    writeStr(view, off, 'RIFF'); off += 4;
+    view.setUint32(off, riffSize, true); off += 4;
+    writeStr(view, off, 'WAVE'); off += 4;
+
+    // fmt chunk
+    writeStr(view, off, 'fmt '); off += 4;
+    view.setUint32(off, fmtSize, true); off += 4;
+    view.setUint16(off, format, true); off += 2;
+    view.setUint16(off, numChannels, true); off += 2;
+    view.setUint32(off, sampleRate, true); off += 4;
+    view.setUint32(off, sampleRate * blockAlign, true); off += 4;
+    view.setUint16(off, blockAlign, true); off += 2;
+    view.setUint16(off, bitDepth, true); off += 2;
+
+    // LIST INFO metadata chunk
+    writeStr(view, off, 'LIST'); off += 4;
+    view.setUint32(off, listInfoSize, true); off += 4;
+    writeStr(view, off, 'INFO'); off += 4;
+
+    writeStr(view, off, iart); off += paddedLen(iart);
+    writeStr(view, off, icmt); off += paddedLen(icmt);
+
+    // data chunk
+    writeStr(view, off, 'data'); off += 4;
+    view.setUint32(off, dataSize, true); off += 4;
+
     for (let i = 0; i < length; i++) {
       for (let ch = 0; ch < numChannels; ch++) {
         let sample = Math.max(-1, Math.min(1, data[ch][i]));
         sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-        view.setInt16(offset, sample, true);
-        offset += 2;
+        view.setInt16(off, sample, true);
+        off += 2;
       }
     }
     return new Blob([buffer], { type: 'audio/wav' });
@@ -563,10 +598,48 @@
     const url = 'https://buy.stripe.com/eVq8wPdqSdb63hugmoffy01';
     const w = window.open(url, '_blank');
     if (!w) { window.location.href = url; }
+    // Local unlock for testing
+    isPro = true;
+    localStorage.setItem('screwai_pro', 'true');
+    closeProUpsell();
+    renderStrains();
+    updateSelectedCount();
+    updateFormatCounts();
+    showToast('PRO unlocked! All strains are now available.');
   });
+
+  function setupPlatform() {
+    if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+      platformName = 'Mobile';
+    } else if (wasDragged) {
+      platformName = 'Drag & Drop';
+    } else {
+      platformName = isBrowser ? 'Web' : 'Desktop';
+    }
+  }
+
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add('active');
+    setTimeout(() => toast.classList.remove('active'), 3000);
+  }
+
+  function getSelectionLimit() {
+    return isPro ? PRO_SELECTION_LIMIT : FREE_SELECTION_LIMIT;
+  }
+
+  const proBadge = document.getElementById('pro-badge');
+  if (proBadge) {
+    proBadge.addEventListener('click', () => {
+      if (!isPro) openProUpsell('#7C3AED');
+    });
+  }
 
   // Initialize
   async function init() {
+    setupPlatform();
     setupAmbientSyrup();
 
     // Load strains
@@ -1020,8 +1093,20 @@
         selectedStrains.delete(index);
         if (card) card.classList.remove('selected');
       } else {
-        selectedStrains.add(index);
-        if (card) card.classList.add('selected');
+        const limit = getSelectionLimit();
+        if (selectedStrains.size >= limit) {
+          if (isPro) {
+            showToast(`PRO allows up to ${limit} strains per batch`);
+          } else {
+            closePreviewModal();
+            const sc = card ? getComputedStyle(card).getPropertyValue('--strain-color').trim() || '#7C3AED' : '#7C3AED';
+            openProUpsell(sc);
+            return;
+          }
+        } else {
+          selectedStrains.add(index);
+          if (card) card.classList.add('selected');
+        }
       }
       updateSelectedCount();
       updateProcessButton();
@@ -1212,12 +1297,15 @@
 
     const visibleSelected = visibleFreeIndexes.filter(index => selectedStrains.has(index)).length;
     const proCount = visibleIndexes.filter(i => strains[i] && strains[i].tier === 'pro').length;
+    const limit = getSelectionLimit();
+    const limitSuffix = isPro ? '' : `/${limit}`;
+
     selectedCount.textContent = proCount > 0
-      ? `${visibleSelected} selected \u2022 ${proCount} PRO locked`
-      : `${visibleSelected} selected`;
+      ? `${visibleSelected}${limitSuffix} selected \u2022 ${proCount} PRO locked`
+      : `${visibleSelected}${limitSuffix} selected`;
 
     const allVisibleSelected = visibleFreeIndexes.length > 0 && visibleSelected === visibleFreeIndexes.length;
-    selectAllBtn.textContent = allVisibleSelected ? 'Clear Visible' : 'Select All Free';
+    selectAllBtn.textContent = allVisibleSelected ? 'Clear Free' : isPro ? 'Select All' : 'Select 1';
   }
 
   function updateFormatCounts() {
@@ -1238,7 +1326,7 @@
 
     const proBadgeText = document.getElementById('pro-badge-text');
     if (proBadgeText) {
-      proBadgeText.textContent = proTotal > 0 ? `${proTotal} PRO` : 'PRO';
+      proBadgeText.textContent = isPro ? 'PRO' : proTotal > 0 ? `${proTotal} PRO` : 'PRO';
     }
 
     const proFomo = document.getElementById('pro-fomo');
@@ -1287,6 +1375,8 @@
       e.preventDefault();
       audioDrop.classList.remove('drag-over');
       if (isProcessing) return;
+      wasDragged = true;
+      platformName = 'Drag & Drop';
       const file = e.dataTransfer.files[0];
       if (file && file.type.startsWith('audio/')) {
         await handleBrowserAudioFile(file);
@@ -1313,18 +1403,22 @@
     selectAllBtn.addEventListener('click', () => {
       if (isProcessing) return;
 
-      const visibleIndexes = strains
+      const visibleFreeIndexes = strains
         .map((strain, index) => ({ strain, index }))
         .filter(({ strain }) => strain.format === activeFormat && strain.tier !== 'pro')
         .map(({ index }) => index);
 
-      const allVisibleSelected = visibleIndexes.length > 0 &&
-        visibleIndexes.every(index => selectedStrains.has(index));
+      const allVisibleSelected = visibleFreeIndexes.length > 0 &&
+        visibleFreeIndexes.every(index => selectedStrains.has(index));
 
       if (allVisibleSelected) {
-        visibleIndexes.forEach(index => selectedStrains.delete(index));
+        visibleFreeIndexes.forEach(index => selectedStrains.delete(index));
       } else {
-        visibleIndexes.forEach(index => selectedStrains.add(index));
+        selectedStrains.clear();
+        const limit = getSelectionLimit();
+        for (let i = 0; i < Math.min(visibleFreeIndexes.length, limit); i++) {
+          selectedStrains.add(visibleFreeIndexes[i]);
+        }
       }
 
       renderStrains();
@@ -1372,12 +1466,17 @@
     processAllBtn.addEventListener('click', async () => {
       if (isProcessing || !audioPath || !outputDir) return;
 
-      const visibleIndexes = strains
+      const visibleFreeIndexes = strains
         .map((strain, index) => ({ strain, index }))
         .filter(({ strain }) => strain.format === activeFormat && strain.tier !== 'pro')
         .map(({ index }) => index);
 
-      visibleIndexes.forEach(index => selectedStrains.add(index));
+      selectedStrains.clear();
+      const limit = getSelectionLimit();
+      for (let i = 0; i < Math.min(visibleFreeIndexes.length, limit); i++) {
+        selectedStrains.add(visibleFreeIndexes[i]);
+      }
+
       renderStrains();
       updateSelectedCount();
       updateProcessButton();
@@ -1595,72 +1694,22 @@
       strains.push({ file, name, format: 'WAV', color, icon, labelImg: lbl(icon), tier: 'pro' });
     });
 
-    // Free Extras — Audio (dual-format): [batName, displayName, color, icon]
+    // Free strains — trimmed to curated 5 essentials: [batName, displayName, color, icon]
     [
-      ['Acktavist', 'Acktavist', '#F59E0B', 'activis'],
-      ['BabySlow', 'Baby Slow', '#10B981', 'slow'],
-      ['ChopSuey', 'Chop Suey', '#BE185D', 'chop'],
-      ['CodeineCorridor', 'Codeine Corridor', '#7C3AED', 'wock'],
-      ['CodeineDreams', 'Codeine Dreams', '#6D28D9', 'wock'],
-      ['DirtySpriteNod', 'Dirty Sprite Nod', '#84CC16', 'slow'],
-      ['DoubleCup3d', 'Double Cup 3D', '#C084FC', 'wock'],
-      ['GhostChop', 'Ghost Chop', '#BE185D', 'chop'],
-      ['LeaningTower', 'Leaning Tower', '#8B5CF6', 'wock'],
-      ['LeanSpeakerPhone', 'Lean Speaker Phone', '#9333EA', 'wock'],
-      ['ManeHOLDUP', 'Mane HOLDUP', '#F43F5E', 'bass'],
-      ['MoveAround', 'Move Around', '#0EA5E9', 'slow'],
-      ['MuddyWock', 'Muddy Wock', '#6D28D9', 'wock'],
-      ['NeonRainfall', 'Neon Rainfall', '#06B6D4', 'echo'],
-      ['OGscrew', 'OG Screw', '#7C3AED', 'slow'],
-      ['PurpleDungeon', 'Purple Dungeon', '#6D28D9', 'wock'],
-      ['ScrewAI_Barre', 'ScrewAI Barre', '#22C55E', 'barre'],
-      ['SlowMoStan', 'Slow Mo Stan', '#10B981', 'slow'],
-      ['StyrofoamCup', 'Styrofoam Cup', '#C084FC', 'wock'],
-      ['Triss', 'Triss', '#BE185D', 'tris'],
-      ['TrissVortex', 'Triss Vortex', '#EC4899', 'tris'],
+      ['Wock', 'Wock', '#6D28D9', 'wock'],
       ['Tuss', 'Tuss', '#B91C1C', 'tuss'],
-      ['WideVerb', 'Wide Verb', '#2563EB', 'echo'],
-      ['Wock', 'Wock', '#6D28D9', 'wock']
-    ].forEach(([batName, displayName, color, icon]) => {
+      ['Triss', 'Triss', '#BE185D', 'tris'],
+      ['Basic_Slow', 'Basic Slow', '#22C55E', 'slow'],
+      ['echo.bat', 'Echo', '#2563EB', 'echo']
+    ].forEach(([name, displayName, color, icon]) => {
+      const isFile = name.endsWith('.bat');
       const labelImg = lbl(icon);
-      strains.push({ file: `${batName}.bat`, name: displayName, format: 'MP3', color, icon, labelImg, tier: 'free' });
-      strains.push({ file: `${batName}.bat`, name: displayName, format: 'WAV', color, icon, labelImg, tier: 'free' });
-    });
-
-    // Free Extras — Ambient Effects (WAV): [file, displayName, color, icon]
-    [
-      ['AnalogWarmth.bat', 'Analog Warmth', '#F59E0B', 'tape'],
-      ['ClarityBoost.bat', 'Clarity Boost', '#3B82F6', 'quali'],
-      ['HollowTrap.bat', 'Hollow Trap', '#0EA5E9', 'echo'],
-      ['OilSpill.bat', 'Oil Spill', '#6D28D9', 'wock'],
-      ['PunchyLoud.bat', 'Punchy Loud', '#F43F5E', 'bass'],
-      ['ShimmerClean.bat', 'Shimmer Clean', '#06B6D4', 'quali'],
-      ['SpacedOut.bat', 'Spaced Out', '#2563EB', 'echo'],
-      ['TapeFat.bat', 'Tape Fat', '#EAB308', 'tape'],
-      ['VinylDust.bat', 'Vinyl Dust', '#FBBF24', 'tape'],
-      ['WidenedSauce.bat', 'Widened Sauce', '#84CC16', 'echo']
-    ].forEach(([file, name, color, icon]) => {
-      strains.push({ file, name, format: 'WAV', color, icon, labelImg: lbl(icon), tier: 'free' });
-    });
-
-    // Free Extras — Studio Effects (WAV): [file, displayName, color, icon]
-    [
-      ['allinone.bat', 'All In One', '#0EA5E9', 'master'],
-      ['bass_boost.bat', 'Bass Boost', '#F43F5E', 'bass'],
-      ['chorus.bat', 'Chorus', '#C084FC', 'echo'],
-      ['distortion.bat', 'Distortion', '#B91C1C', 'bass'],
-      ['echo.bat', 'Echo', '#2563EB', 'echo'],
-      ['flanger.bat', 'Flanger', '#06B6D4', 'echo'],
-      ['master.bat', 'Master', '#0EA5E9', 'master'],
-      ['quali.bat', 'Quali', '#3B82F6', 'quali'],
-      ['reverb.bat', 'Reverb', '#2563EB', 'echo'],
-      ['reverse+echo+limiter.bat', 'Reverse Echo Limiter', '#1D4ED8', 'echo'],
-      ['stereo_widen.bat', 'Stereo Widen', '#06B6D4', 'echo'],
-      ['tremolo.bat', 'Tremolo', '#BE185D', 'slow'],
-      ['vhs.bat', 'VHS', '#F59E0B', 'tape'],
-      ['vinyl.bat', 'Vinyl', '#FBBF24', 'tape']
-    ].forEach(([file, name, color, icon]) => {
-      strains.push({ file, name, format: 'WAV', color, icon, labelImg: lbl(icon), tier: 'free' });
+      if (isFile) {
+        strains.push({ file: name, name: displayName, format: 'WAV', color, icon, labelImg, tier: 'free' });
+      } else {
+        strains.push({ file: `${name}.bat`, name: displayName, format: 'MP3', color, icon, labelImg, tier: 'free' });
+        strains.push({ file: `${name}.bat`, name: displayName, format: 'WAV', color, icon, labelImg, tier: 'free' });
+      }
     });
 
     return strains;

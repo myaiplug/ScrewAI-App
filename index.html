@@ -1027,6 +1027,31 @@
       color: rgba(228, 203, 247, 0.56);
     }
 
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      z-index: 99999;
+      background: rgba(8, 3, 14, 0.92);
+      border: 1px solid rgba(190, 124, 255, 0.25);
+      border-radius: 10px;
+      padding: 10px 20px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--txt);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s, transform 0.3s;
+      backdrop-filter: blur(12px);
+      white-space: nowrap;
+    }
+    .toast.active {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+
     /* ── Glass vial container ── */
     .strain-strip {
       flex: 0 0 30px;
@@ -2457,6 +2482,8 @@
   </div>
 
   <!-- PRO Upsell Modal -->
+  <div class="toast" id="toast"></div>
+
   <div class="pro-upsell-overlay" id="pro-upsell">
     <div class="pro-upsell" style="position:relative">
       <button class="pro-upsell-close" id="pro-upsell-close" aria-label="Close">
