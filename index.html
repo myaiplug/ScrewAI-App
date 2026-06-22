@@ -2531,7 +2531,15 @@
     </div>
   </div>
 
+  <script src="professional-studio.js"></script>
   <script src="renderer.js"></script>
   <script src="particles.js"></script>
+  <script>
+    // Bridge: make ProStudio available to ScrewAI processing
+    window.addEventListener('DOMContentLoaded', () => {
+      window.ScrewAIProStudio = ScrewAIProStudio;
+      window.dispatchEvent(new CustomEvent('pro-studio-ready'));
+    });
+  </script>
 </body>
 </html>
