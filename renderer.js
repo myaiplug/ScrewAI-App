@@ -202,6 +202,9 @@
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
     audioCtx.close();
 
+    const isMp3Input = file.name.toLowerCase().endsWith('.mp3');
+    const wantsMp3 = !conversionSettings.mp3ToWav && isMp3Input;
+
     const results = [];
     for (let i = 0; i < strains.length; i++) {
       const strain = strains[i];
@@ -218,13 +221,27 @@
       try {
         const profile = getWaProfile(strain.name);
         const outputBuffer = await renderWaChain(audioBuffer, profile);
-        const blob = audioBufferToWavBlob(outputBuffer, strain.name);
+
+        let blob;
+        let ext;
+        if (wantsMp3 && typeof lamejs !== 'undefined') {
+          ext = '.mp3';
+          const mp3Data = await encodeMp3(outputBuffer);
+          blob = new Blob(mp3Data, { type: 'audio/mpeg' });
+        } else {
+          ext = '.wav';
+          blob = audioBufferToWavBlob(outputBuffer, strain.name);
+        }
+
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${file.name.replace(/\.[^.]+$/, '')}_${strain.name.replace(/[^a-z0-9]/gi, '_')}.wav`;
+        a.download = `${file.name.replace(/\.[^.]+$/, '')}_${strain.name.replace(/[^a-z0-9]/gi, '_')}${ext}`;
         a.click();
-        URL.revokeObjectURL(url);
+
+        // Revoke after a delay so the browser has time to start the download
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+
         results.push({ strain: strain.name, success: true, output: a.download });
       } catch (err) {
         console.error(`Failed to process ${strain.name}:`, err);
@@ -232,6 +249,64 @@
       }
     }
     return results;
+  }
+
+  function encodeMp3(audioBuffer) {
+    return new Promise((resolve, reject) => {
+      try {
+        const numChannels = Math.min(audioBuffer.numberOfChannels, 2);
+        const sampleRate = audioBuffer.sampleRate;
+        const bitRate = 192;
+        const mp3enc = new lamejs.Mp3Encoder(numChannels, sampleRate, bitRate);
+        const samples = audioBuffer.getChannelData(0);
+        const blockSize = 1152;
+        const mp3Data = [];
+
+        function floatTo16bit(src, dst, offset) {
+          for (let j = 0; j < src.length; j++) {
+            const s = Math.max(-1, Math.min(1, src[j]));
+            dst[offset + j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+        }
+
+        const left = new Int16Array(samples.length);
+        floatTo16bit(samples, left, 0);
+        let right = null;
+        if (numChannels > 1) {
+          const rSamples = audioBuffer.getChannelData(1);
+          right = new Int16Array(rSamples.length);
+          floatTo16bit(rSamples, right, 0);
+        }
+
+        for (let i = 0; i < samples.length; i += blockSize) {
+          const chunkEnd = Math.min(i + blockSize, samples.length);
+          const chunkLen = chunkEnd - i;
+          if (chunkLen < blockSize) {
+            const lastL = new Int16Array(blockSize);
+            lastL.set(left.subarray(i, chunkEnd));
+            const lastR = right ? new Int16Array(blockSize).fill(0) : null;
+            if (right) lastR.set(right.subarray(i, chunkEnd));
+            const buf = lastR
+              ? mp3enc.encodeBuffer(lastL, lastR)
+              : mp3enc.encodeBuffer(lastL);
+            if (buf.length > 0) mp3Data.push(buf);
+            break;
+          }
+          const lChunk = left.subarray(i, i + blockSize);
+          const rChunk = right ? right.subarray(i, i + blockSize) : null;
+          const buf = rChunk
+            ? mp3enc.encodeBuffer(lChunk, rChunk)
+            : mp3enc.encodeBuffer(lChunk);
+          if (buf.length > 0) mp3Data.push(buf);
+        }
+
+        const end = mp3enc.flush();
+        if (end.length > 0) mp3Data.push(end);
+        resolve(mp3Data);
+      } catch (err) {
+        reject(err);
+      }
+    });
   }
 
   async function renderWaChain(audioBuffer, cfg) {
@@ -335,25 +410,29 @@
       node = ph;
     }
 
-    // Echo: Delay + Feedback
+    // Echo: Delay + Feedback (with hard clamp to prevent runaway)
     if (cfg.echo) {
       const [delayTime, decay, mix] = cfg.echo;
+      const safeDecay = Math.min(decay, 0.45);
       const delay = ctx.createDelay(2);
       delay.delayTime.value = delayTime;
       const feedback = ctx.createGain();
-      feedback.gain.value = decay;
+      feedback.gain.value = safeDecay;
       const wet = ctx.createGain();
-      wet.gain.value = mix;
+      wet.gain.value = Math.min(mix, 0.6);
       const dry = ctx.createGain();
-      dry.gain.value = 1 - mix;
+      dry.gain.value = 1 - Math.min(mix, 0.6);
       const merge = ctx.createGain();
+      const echoTrim = ctx.createGain();
+      echoTrim.gain.value = 0.85;
       node.connect(dry);
       node.connect(delay);
       delay.connect(feedback);
       feedback.connect(delay);
       delay.connect(wet);
+      wet.connect(echoTrim);
       dry.connect(merge);
-      wet.connect(merge);
+      echoTrim.connect(merge);
       node = merge;
     }
 
@@ -377,12 +456,20 @@
       node = comp;
     }
 
-    // Simple hard limiter via makeup gain (approximation)
+    // Hard limiter — WaveShaper with clamp curve + makeup gain
     if (cfg.limiter) {
-      const limitGain = ctx.createGain();
-      limitGain.gain.value = 0.985;
-      node.connect(limitGain);
-      node = limitGain;
+      const ws = ctx.createWaveShaper();
+      const curve = new Float32Array(512);
+      const limit = 0.9;
+      for (let i = 0; i < 512; i++) {
+        const x = (i / 256) - 1;
+        curve[i] = Math.max(-limit, Math.min(limit, x));
+      }
+      ws.curve = curve;
+      const makeup = ctx.createGain();
+      makeup.gain.value = 0.95;
+      node.connect(ws);
+      node = ws;
     }
 
     // Stereo widening: increase side channel gain
@@ -400,6 +487,12 @@
       rightG.connect(merge, 0, 1);
       node = merge;
     }
+
+    // Master output gain to prevent clipping
+    const masterOut = ctx.createGain();
+    masterOut.gain.value = 0.88;
+    node.connect(masterOut);
+    node = masterOut;
 
     node.connect(ctx.destination);
     source.start(0);
