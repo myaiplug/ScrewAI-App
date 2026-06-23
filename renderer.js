@@ -21,6 +21,7 @@
   let isPro = localStorage.getItem('screwai_pro') === 'true';
   let wasDragged = false;
   let platformName = 'Web';
+  let isApple = /iPhone|iPad|iPod|Macintosh|MacIntel|MacPPC|Mac68K|Apple/.test(navigator.userAgent);
 
   const FREE_SELECTION_LIMIT = 1;
   const PRO_SELECTION_LIMIT = 10;
@@ -195,9 +196,25 @@
   }
 
   // ── Web Audio Processing Engine ──
+  function createSafeAudioContext() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(function() {});
+      }
+      return ctx;
+    } catch (e) {
+      // Safari fallback
+      try {
+        return new window.webkitAudioContext();
+      } catch (e2) {
+        throw new Error('AudioContext not supported in this browser');
+      }
+    }
+  }
+
   async function processBrowserAudio(file, strains) {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    const audioCtx = createSafeAudioContext();
     const arrayBuffer = await file.arrayBuffer();
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
     audioCtx.close();
@@ -234,13 +251,32 @@
         }
 
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${file.name.replace(/\.[^.]+$/, '')}_${strain.name.replace(/[^a-z0-9]/gi, '_')}${ext}`;
-        a.click();
+        const fileName = `${file.name.replace(/\.[^.]+$/, '')}_${strain.name.replace(/[^a-z0-9]/gi, '_')}${ext}`;
+
+        // Safari blocks a.click() for blob URLs — use open as fallback
+        if (isApple) {
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          anchor.download = fileName;
+          anchor.style.display = 'none';
+          document.body.appendChild(anchor);
+          anchor.click();
+          // Safari sometimes needs the download attribute removed and URL opened directly
+          setTimeout(function() {
+            if (!anchor.download) {
+              window.open(url, '_blank');
+            }
+            document.body.removeChild(anchor);
+          }, 200);
+        } else {
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          a.click();
+        }
 
         // Revoke after a delay so the browser has time to start the download
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
 
         results.push({ strain: strain.name, success: true, output: a.download });
       } catch (err) {
@@ -312,7 +348,9 @@
   async function renderWaChain(audioBuffer, cfg) {
     const duration = audioBuffer.duration / (cfg.slowdown || 1);
     const length = Math.ceil(audioBuffer.sampleRate * duration);
-    const ctx = new OfflineAudioContext(audioBuffer.numberOfChannels, length, audioBuffer.sampleRate);
+    // Safari caps OfflineAudioContext at 2 channels
+    const channels = isApple ? Math.min(audioBuffer.numberOfChannels, 2) : audioBuffer.numberOfChannels;
+    const ctx = new OfflineAudioContext(channels, length, audioBuffer.sampleRate);
 
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
@@ -368,15 +406,33 @@
       osc.type = 'sine';
       const modGain = ctx.createGain();
       modGain.gain.value = depth;
-      const bias = ctx.createConstantSource();
-      bias.offset.value = 1 - depth;
-      osc.connect(modGain);
-      modGain.connect(amp.gain);
-      bias.connect(amp.gain);
-      node.connect(amp);
-      node = amp;
-      osc.start();
-      bias.start();
+      // Safari doesn't support createConstantSource — use a low-frequency osc as bias
+      if (ctx.createConstantSource) {
+        const bias = ctx.createConstantSource();
+        bias.offset.value = 1 - depth;
+        osc.connect(modGain);
+        modGain.connect(amp.gain);
+        bias.connect(amp.gain);
+        node.connect(amp);
+        node = amp;
+        osc.start();
+        bias.start();
+      } else {
+        // Safari fallback: use a second oscillator at ~0 Hz as DC bias
+        const bias = ctx.createOscillator();
+        bias.frequency.value = 0.001;
+        bias.type = 'sine';
+        const biasGain = ctx.createGain();
+        biasGain.gain.value = 1 - depth;
+        osc.connect(modGain);
+        modGain.connect(amp.gain);
+        bias.connect(biasGain);
+        biasGain.connect(amp.gain);
+        node.connect(amp);
+        node = amp;
+        osc.start();
+        bias.start();
+      }
     }
 
     // Vibrato: modulate source.detune (connected before any routing)
@@ -399,7 +455,8 @@
       ph.type = 'allpass';
       ph.Q.value = 2;
       const dur = audioBuffer.duration / (cfg.slowdown || 1);
-      const pts = 200;
+      // Safari's setValueCurveAtTime caps at 128 samples — use 64 for cross-browser safety
+      const pts = isApple ? 64 : 128;
       const curve = new Float32Array(pts);
       for (let j = 0; j < pts; j++) {
         const phase = (j / pts) * Math.PI * 2 * rate * dur;
@@ -607,7 +664,12 @@
           const path = await handleBrowserAudioFile(file);
           resolve(path);
         };
-        input.click();
+        // Safari requires user gesture for file input — use the drop zone click instead
+        try { input.click(); } catch (e) {
+          // If programmatic click fails (Safari), trigger via the audio drop element
+          const drop = document.getElementById('audio-drop');
+          if (drop) drop.click();
+        }
       });
     },
     selectOutput: async () => {
@@ -702,7 +764,10 @@
   });
 
   function setupPlatform() {
-    if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+    if (isApple) {
+      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+      platformName = isIOS ? 'Mobile' : (wasDragged ? 'Drag & Drop' : 'Web');
+    } else if (/Mobi|Android/i.test(navigator.userAgent)) {
       platformName = 'Mobile';
     } else if (wasDragged) {
       platformName = 'Drag & Drop';
@@ -1281,7 +1346,8 @@
     const sr = buf.sampleRate;
     const ch = buf.numberOfChannels;
     const segSamples = Math.floor(segLen * sr);
-    const origBuffer = new OfflineAudioContext(ch, segSamples, sr).createBuffer(ch, segSamples, sr);
+    const safeCh = isApple ? Math.min(ch, 2) : ch;
+    const origBuffer = new OfflineAudioContext(safeCh, segSamples, sr).createBuffer(safeCh, segSamples, sr);
     for (let c = 0; c < ch; c++) {
       const src = buf.getChannelData(c);
       const dst = origBuffer.getChannelData(c);
