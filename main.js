@@ -11,7 +11,7 @@ let mainWindow;
 // Billing URL resolution order: SCREWAI_BILLING_URL env → settings.json
 // licensing.billing_url → local default. Set SCREWAI_BILLING_URL to the
 // deployed billing-service before shipping.
-const DEFAULT_BILLING_URL = 'http://localhost:8787';
+const DEFAULT_BILLING_URL = 'https://liminal-stemsplit.onrender.com';
 const FREE_MP3_STRAINS = ['Activis_BlackGray', 'Wock_Purple', 'Tuss_Red', 'Tris_Pink'];
 
 function resolveBillingUrl() {
