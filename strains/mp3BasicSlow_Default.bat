@@ -1,0 +1,1 @@
+ffmpeg -i %~1 -filter:a "asetrate=44100*0.85,aresample=44100,atempo=0.94,firequalizer=gain_entry='entry(0,0);entry(60,10);entry(250,4)'" %~1_slowed_basic.mp3

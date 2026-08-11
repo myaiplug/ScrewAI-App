@@ -5,6 +5,121 @@ const { spawn } = require('child_process');
 
 let mainWindow;
 
+// ── Licensing ─────────────────────────────────────────────────────────────
+// Free tier unlocks the FREE_MP3_STRAINS set below; everything else (all other
+// MP3 strains + every WAV strain) is PRO-locked until a valid license activates.
+// Billing URL resolution order: SCREWAI_BILLING_URL env → settings.json
+// licensing.billing_url → local default. Set SCREWAI_BILLING_URL to the
+// deployed billing-service before shipping.
+const DEFAULT_BILLING_URL = 'http://localhost:8787';
+const FREE_MP3_STRAINS = ['Activis_BlackGray', 'Wock_Purple', 'Tuss_Red', 'Tris_Pink'];
+
+function resolveBillingUrl() {
+  if (process.env.SCREWAI_BILLING_URL) return process.env.SCREWAI_BILLING_URL;
+  try {
+    const settingsPath = path.join(screwaiDataRoot, 'settings.json');
+    if (fs.existsSync(settingsPath)) {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      if (settings.licensing && settings.licensing.billing_url) {
+        return settings.licensing.billing_url;
+      }
+    }
+  } catch (err) {}
+  return DEFAULT_BILLING_URL;
+}
+
+function getLicenseFile() {
+  return path.join(screwaiDataRoot, 'license.json');
+}
+
+function readLicense() {
+  try {
+    if (!fs.existsSync(getLicenseFile())) return null;
+    return JSON.parse(fs.readFileSync(getLicenseFile(), 'utf8'));
+  } catch (err) {
+    return null;
+  }
+}
+
+function writeLicense(license) {
+  fs.writeFileSync(getLicenseFile(), JSON.stringify(license, null, 2), 'utf8');
+}
+
+function maskLicenseKey(key) {
+  if (!key || key.length < 8) return '••••••••';
+  return `${key.slice(0, 4)}••••${key.slice(-4)}`;
+}
+
+function isStrainFree(name) {
+  const isWav = name.startsWith('mWav') || name.startsWith('Wav');
+  if (isWav) return false;
+  const baseName = name.replace(/^(mp3|mWav|Wav)/, '');
+  return FREE_MP3_STRAINS.includes(baseName);
+}
+
+function getLicenseStatus() {
+  const license = readLicense();
+  if (!license || !license.pro) {
+    return { pro: false, email: null, licenseKeyMasked: null, source: null, billingUrl: resolveBillingUrl() };
+  }
+  return {
+    pro: true,
+    email: license.email || null,
+    licenseKeyMasked: license.licenseKey ? maskLicenseKey(license.licenseKey) : null,
+    source: license.source || null,
+    billingUrl: resolveBillingUrl(),
+  };
+}
+
+async function activateLicense({ email, licenseKey }) {
+  const billingUrl = resolveBillingUrl();
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const key = String(licenseKey || '').trim();
+  if (!normalizedEmail) return { ok: false, error: 'Email is required' };
+  if (!key) return { ok: false, error: 'License key is required' };
+
+  let res;
+  try {
+    res = await fetch(`${billingUrl}/api/licenses/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: normalizedEmail, licenseKey: key }),
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (err) {
+    return { ok: false, error: `License server unreachable (${billingUrl}): ${err.message}` };
+  }
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.valid) {
+    return { ok: false, error: data.error || `License server returned status ${res.status}` };
+  }
+
+  writeLicense({
+    pro: true,
+    email: normalizedEmail,
+    licenseKey: key,
+    source: data.source || data.plan || 'remote',
+    validatedAt: new Date().toISOString(),
+  });
+  return { ok: true, pro: true, email: normalizedEmail, source: data.source || data.plan || 'remote' };
+}
+
+function deactivateLicense() {
+  try {
+    fs.rmSync(getLicenseFile(), { force: true });
+  } catch (err) {}
+  return { ok: true, pro: false };
+}
+
+// Free-tier gating applied server-side so locked strains can never render,
+// even if the renderer is manipulated.
+function licenseAllowsStrain(name) {
+  if (isStrainFree(name)) return true;
+  const license = readLicense();
+  return !!(license && license.pro);
+}
+
 // Force Chromium caches into a writable location to prevent cache_util_win access errors.
 const appDataRoot = process.env.APPDATA || app.getPath('appData');
 const screwaiDataRoot = path.join(appDataRoot, 'ScrewAI Pro');
@@ -75,11 +190,16 @@ ipcMain.on('maximize-window', () => {
 });
 ipcMain.on('close-window', () => mainWindow.close());
 
+// Licensing IPC
+ipcMain.handle('get-license-status', () => getLicenseStatus());
+ipcMain.handle('activate-license', async (event, payload) => activateLicense(payload || {}));
+ipcMain.handle('deactivate-license', () => deactivateLicense());
+
 // Get available strains (batch files)
 ipcMain.handle('get-strains', async () => {
   const strainsDir = app.isPackaged 
     ? path.join(process.resourcesPath, 'strains')
-    : path.join(__dirname, '..');
+    : path.join(__dirname, 'strains');
     
   try {
     const files = fs.readdirSync(strainsDir);
@@ -232,21 +352,11 @@ ipcMain.handle('get-strains', async () => {
       }
 
       const freeFileNames = [
-        'Acktavist', 'BabySlow', 'ChopSuey', 'CodeineCorridor', 'CodeineDreams',
-        'DirtySpriteNod', 'DoubleCup3d', 'GhostChop', 'LeaningTower',
-        'LeanSpeakerPhone', 'ManeHOLDUP', 'MoveAround', 'MuddyWock',
-        'NeonRainfall', 'OGscrew', 'PurpleDungeon', 'ScrewAI_Barre',
-        'SlowMoStan', 'StyrofoamCup', 'Triss', 'TrissVortex', 'Tuss',
-        'WideVerb', 'Wock',
-        'AnalogWarmth', 'ClarityBoost', 'HollowTrap', 'OilSpill',
-        'PunchyLoud', 'ShimmerClean', 'SpacedOut', 'TapeFat',
-        'VinylDust', 'WidenedSauce',
-        'allinone', 'bass_boost', 'chorus', 'distortion', 'echo',
-        'flanger', 'master', 'quali', 'reverb', 'reverse+echo+limiter',
-        'stereo_widen', 'tremolo', 'vhs', 'vinyl'
+        'Activis_BlackGray', 'Wock_Purple', 'Tuss_Red', 'Tris_Pink'
       ];
       const baseName = name.replace(/^(mp3|mWav|Wav)/, '');
-      const isFree = freeFileNames.some(fn => baseName === fn || lowerName === fn.toLowerCase());
+      const isFree = isStrainFree(name) && freeFileNames.includes(baseName);
+      const license = readLicense();
 
       return {
         file,
@@ -256,6 +366,7 @@ ipcMain.handle('get-strains', async () => {
         icon,
         labelImg,
         tier: isFree ? 'free' : 'pro',
+        locked: !isFree && !(license && license.pro),
         path: path.join(strainsDir, file)
       };
     });
@@ -294,12 +405,25 @@ ipcMain.handle('select-output', async () => {
 ipcMain.handle('process-audio', async (event, { audioPath, outputDir, strains }) => {
   const results = [];
   const audioName = path.basename(audioPath, path.extname(audioPath));
-  
+  const license = readLicense();
+  const isPro = !!(license && license.pro);
+
   for (let i = 0; i < strains.length; i++) {
     const strain = strains[i];
-    const strainName = strain.file.replace('.bat', '').replace(/^(mp3|Wav)/, '');
+    const strainName = strain.file.replace('.bat', '').replace(/^(mp3|mWav|Wav)/, '');
     const outputExt = strain.format === 'WAV' ? '.wav' : '.mp3';
     const outputPath = path.join(outputDir, `${audioName}_ScrewAI_${strainName}${outputExt}`);
+
+    // Server-side enforcement: free tier may only render the free MP3 set.
+    if (!isPro && !isStrainFree(strain.file.replace('.bat', ''))) {
+      results.push({
+        strain: strain.name,
+        success: false,
+        error: 'Locked strain — upgrade to PRO to unlock',
+        locked: true,
+      });
+      continue;
+    }
     
     // Send progress
     mainWindow.webContents.send('process-progress', {

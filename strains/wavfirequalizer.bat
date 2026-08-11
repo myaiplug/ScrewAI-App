@@ -1,0 +1,1 @@
+ffmpeg -i %~1 -af "firequalizer=gain_entry='100 3;1000 -2;8000 2'" %~2_firequalizer.wav

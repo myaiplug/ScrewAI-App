@@ -2272,6 +2272,73 @@
       letter-spacing: 0.04em;
       margin-top: 2px;
     }
+    .pro-activate-divider {
+      margin: 14px 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #94a3b8;
+      font-size: 9px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .pro-activate-divider::before,
+    .pro-activate-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(148, 163, 184, 0.2);
+    }
+    .pro-activate-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .pro-activate-form input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      background: rgba(2, 6, 23, 0.6);
+      color: #e2e8f0;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .pro-activate-form input:focus {
+      border-color: rgba(176, 124, 255, 0.6);
+    }
+    .pro-activate-btn {
+      width: 100%;
+      padding: 10px;
+      border: 0;
+      border-radius: 10px;
+      background: rgba(176, 124, 255, 0.15);
+      color: #d9c2ff;
+      font-family: 'Sora', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.15s;
+    }
+    .pro-activate-btn:hover {
+      background: rgba(176, 124, 255, 0.28);
+      transform: translateY(-1px);
+    }
+    .pro-activate-status {
+      min-height: 14px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      color: #6ee7b7;
+      text-align: center;
+      white-space: normal;
+    }
+    .pro-activate-status.error {
+      color: #fda4af;
+    }
   </style>
 </head>
 <body>
@@ -2527,6 +2594,16 @@
           Unlock PRO — $19.99
           <span class="pro-cta-sub">One-time payment &bull; Lifetime access &bull; Free updates</span>
         </button>
+
+        <div class="pro-activate-divider">
+          <span>Already purchased? Enter your emailed license key</span>
+        </div>
+        <form class="pro-activate-form" id="pro-activate-form">
+          <input type="email" id="pro-activate-email" placeholder="Purchase email" autocomplete="email" spellcheck="false" required />
+          <input type="text" id="pro-activate-key" placeholder="License key" spellcheck="false" required />
+          <button type="submit" class="pro-activate-btn" id="pro-activate-btn">Activate PRO</button>
+          <div class="pro-activate-status" id="pro-activate-status"></div>
+        </form>
       </div>
     </div>
   </div>

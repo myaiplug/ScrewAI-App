@@ -1,0 +1,1 @@
+rubberband -t 1.1 -p 0 -R -c 3 "%~1" "%~2_80c_vocalpresence_rubber.wav"

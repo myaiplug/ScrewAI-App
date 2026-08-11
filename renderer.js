@@ -19,12 +19,22 @@
   let browserAudioBuffer = null; // decoded AudioBuffer for browser mode
   let isBrowser = false; // true when running outside Electron
   let isPro = localStorage.getItem('screwai_pro') === 'true';
+  let licenseEmail = null;
+  let licenseKeyMasked = null;
   let wasDragged = false;
   let platformName = 'Web';
   let isApple = /iPhone|iPad|iPod|Macintosh|MacIntel|MacPPC|Mac68K|Apple/.test(navigator.userAgent);
 
   const FREE_SELECTION_LIMIT = 1;
   const PRO_SELECTION_LIMIT = 10;
+
+  // A strain is locked when it is not in the free set AND no PRO license is active.
+  // Desktop: main.js sends the authoritative `locked` flag. Browser fallback: derive from tier + isPro.
+  function isStrainLocked(strain) {
+    if (!strain) return false;
+    if (typeof strain.locked === 'boolean') return strain.locked;
+    return strain.tier === 'pro' && !isPro;
+  }
 
   // ── Web Audio Effect Profiles ──
   const WA = {
@@ -681,6 +691,16 @@
       if (!file) throw new Error('No audio file loaded');
       return processBrowserAudio(file, data.strains);
     },
+    getLicenseStatus: async () => {
+      return { pro: localStorage.getItem('screwai_pro') === 'true', email: null, licenseKeyMasked: null, source: null, billingUrl: null };
+    },
+    activateLicense: async () => {
+      return { ok: false, error: 'Activation is only available in the desktop app' };
+    },
+    deactivateLicense: async () => {
+      localStorage.removeItem('screwai_pro');
+      return { ok: true, pro: false };
+    },
     onProgress: () => {}
   };
 
@@ -749,18 +769,65 @@
   document.getElementById('pro-upsell').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) closeProUpsell();
   });
+
+  // License activation form
+  const proActivateForm = document.getElementById('pro-activate-form');
+  if (proActivateForm) {
+    proActivateForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const statusEl = document.getElementById('pro-activate-status');
+      const btn = document.getElementById('pro-activate-btn');
+      const email = document.getElementById('pro-activate-email').value.trim();
+      const licenseKey = document.getElementById('pro-activate-key').value.trim();
+      if (!email || !licenseKey) {
+        statusEl.textContent = 'Enter both your purchase email and license key.';
+        statusEl.className = 'pro-activate-status error';
+        return;
+      }
+      statusEl.textContent = 'Verifying license…';
+      statusEl.className = 'pro-activate-status';
+      btn.disabled = true;
+      try {
+        const res = await screwaiApi.activateLicense({ email, licenseKey });
+        if (res && res.ok && res.pro) {
+          isPro = true;
+          licenseEmail = res.email || email;
+          localStorage.setItem('screwai_pro', 'true');
+          statusEl.textContent = 'PRO activated — all strains unlocked!';
+          statusEl.className = 'pro-activate-status';
+          closeProUpsell();
+          renderStrains();
+          updateSelectedCount();
+          updateFormatCounts();
+          updateProcessButton();
+          showToast('PRO activated! All strains are now available.');
+        } else {
+          statusEl.textContent = (res && res.error) || 'Activation failed. Check email and key and try again.';
+          statusEl.className = 'pro-activate-status error';
+        }
+      } catch (err) {
+        statusEl.textContent = 'Activation error: ' + (err.message || String(err));
+        statusEl.className = 'pro-activate-status error';
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
   document.getElementById('pro-cta').addEventListener('click', () => {
     const url = 'https://buy.stripe.com/eVq8wPdqSdb63hugmoffy01';
     const w = window.open(url, '_blank');
     if (!w) { window.location.href = url; }
-    // Local unlock for testing
-    isPro = true;
-    localStorage.setItem('screwai_pro', 'true');
-    closeProUpsell();
-    renderStrains();
-    updateSelectedCount();
-    updateFormatCounts();
-    showToast('PRO unlocked! All strains are now available.');
+    // Browser demo only: keep local unlock. Desktop uses real license activation
+    // after purchase — the emailed license key is entered in the activation form.
+    if (typeof screwaiApi.activateLicense !== 'function' || screwaiApi === fallbackApi) {
+      isPro = true;
+      localStorage.setItem('screwai_pro', 'true');
+      closeProUpsell();
+      renderStrains();
+      updateSelectedCount();
+      updateFormatCounts();
+      showToast('PRO unlocked! All strains are now available.');
+    }
   });
 
   function setupPlatform() {
@@ -790,8 +857,29 @@
 
   const proBadge = document.getElementById('pro-badge');
   if (proBadge) {
-    proBadge.addEventListener('click', () => {
-      if (!isPro) openProUpsell('#7C3AED');
+    proBadge.addEventListener('click', async () => {
+      if (!isPro) {
+        openProUpsell('#7C3AED');
+        return;
+      }
+      const doDeactivate = confirm(`ScrewAI PRO is active${licenseEmail ? ` for ${licenseEmail}` : ''}.\n\nClick OK to deactivate this license on this device.`);
+      if (doDeactivate) {
+        try {
+          await screwaiApi.deactivateLicense();
+          localStorage.removeItem('screwai_pro');
+          isPro = false;
+          licenseEmail = null;
+          licenseKeyMasked = null;
+          strains = await screwaiApi.getStrains();
+          renderStrains();
+          updateSelectedCount();
+          updateFormatCounts();
+          updateProcessButton();
+          showToast('PRO deactivated. Free strains remain available.');
+        } catch (err) {
+          showToast('Deactivation error: ' + err.message);
+        }
+      }
     });
   }
 
@@ -800,10 +888,30 @@
     setupPlatform();
     setupAmbientSyrup();
 
+    // Load license state before strains so gating is correct on first paint
+    try {
+      const lic = await screwaiApi.getLicenseStatus();
+      if (lic) {
+        isPro = !!lic.pro;
+        licenseEmail = lic.email || null;
+        licenseKeyMasked = lic.licenseKeyMasked || null;
+      }
+    } catch (err) {
+      console.warn('License status load failed:', err);
+    }
+
     // Load strains
     strains = await screwaiApi.getStrains();
     updateFormatCounts();
     renderStrains();
+
+    // Activation form only works in the desktop app — hide it in browser mode
+    if (screwaiApi === fallbackApi) {
+      const divider = document.querySelector('.pro-activate-divider');
+      const form = document.getElementById('pro-activate-form');
+      if (divider) divider.style.display = 'none';
+      if (form) form.style.display = 'none';
+    }
 
     // Setup event listeners
     setupAudioDrop();
@@ -914,7 +1022,7 @@
     return Array.from(selectedStrains)
       .map(index => strains[index])
       .filter(Boolean)
-      .filter(strain => strain.format === activeFormat && strain.tier !== 'pro');
+      .filter(strain => strain.format === activeFormat && !isStrainLocked(strain));
   }
 
   function syncFormatAvailability() {
@@ -1113,10 +1221,10 @@
         const imageLargeClass = labelImg && labelImg.includes('image.png')
           ? ' strip-label-img-image-large'
           : '';
-        const isPro = strain.tier === 'pro';
+        const isLocked = isStrainLocked(strain);
         const waProfile = getWaProfile(strain.name);
         const slowdownPct = waProfile && waProfile.slowdown ? Math.round((1 - waProfile.slowdown) * 100) : 0;
-        return `<div class="strain-strip${selectedStrains.has(index) ? ' selected' : ''}${isPro ? ' pro-locked' : ''}" data-index="${index}" data-slowdown="${slowdownPct}" style="--strain-color: ${nonAdjacentColors[visualOrder]}; --strip-order: ${visualOrder}; --fill-base: ${bottleProfile.baseFill}%; --fill-hover: ${bottleProfile.hoverFill}%; --fill-selected: ${bottleProfile.selectedFill}%">
+        return `<div class="strain-strip${selectedStrains.has(index) ? ' selected' : ''}${isLocked ? ' pro-locked' : ''}" data-index="${index}" data-slowdown="${slowdownPct}" style="--strain-color: ${nonAdjacentColors[visualOrder]}; --strip-order: ${visualOrder}; --fill-base: ${bottleProfile.baseFill}%; --fill-hover: ${bottleProfile.hoverFill}%; --fill-selected: ${bottleProfile.selectedFill}%">
         <div class="strip-cap">
           <span class="strip-cap-ridges"></span>
         </div>
@@ -1140,7 +1248,7 @@
         <div class="strip-icon">${strainIcons[strain.icon] || strainIcons.default}</div>
         <div class="strip-name">${strain.name}</div>
         <div class="strip-slowdown">${slowdownPct}%</div>
-        ${isPro ? `<div class="pro-lock-badge"><svg class="pro-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span class="pro-lock-label">PRO</span></div>` : ''}
+        ${isLocked ? `<div class="pro-lock-badge"><svg class="pro-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span class="pro-lock-label">PRO</span></div>` : ''}
         <div class="strip-check">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
             <polyline points="20 6 9 17 4 12"/>
@@ -1189,12 +1297,12 @@
     document.getElementById('preview-strain-name').textContent = strain.name;
     document.getElementById('ab-b-desc').textContent = `${strain.name} Preview`;
 
-    const isPro = strain.tier === 'pro';
-    document.getElementById('preview-strain-sub').textContent = isPro ? 'Premium Strain \u2022 PRO Exclusive' : 'Free Strain';
+    const isLocked = isStrainLocked(strain);
+    document.getElementById('preview-strain-sub').textContent = isLocked ? 'Premium Strain \u2022 PRO Exclusive' : 'Free Strain';
     const cta = document.getElementById('preview-cta');
     const ctaText = document.getElementById('preview-cta-text');
     const ctaSub = document.getElementById('preview-cta-sub');
-    if (isPro) {
+    if (isLocked) {
       cta.className = 'preview-cta pro-cta-style';
       ctaText.textContent = 'Unlock PRO';
       ctaSub.textContent = 'One-time payment \u2022 Lifetime access \u2022 Free updates';
@@ -1235,7 +1343,7 @@
     const strain = strains[previewStrainIndex];
     if (!strain) return;
 
-    if (strain.tier === 'pro') {
+    if (isStrainLocked(strain)) {
       closePreviewModal();
       const card = document.querySelector(`.strain-strip[data-index="${previewStrainIndex}"]`);
       let color = '#7C3AED';
@@ -1451,11 +1559,11 @@
 
     const visibleFreeIndexes = strains
       .map((strain, index) => ({ strain, index }))
-      .filter(({ strain }) => strain.format === activeFormat && strain.tier !== 'pro')
+      .filter(({ strain }) => strain.format === activeFormat && !isStrainLocked(strain))
       .map(({ index }) => index);
 
     const visibleSelected = visibleFreeIndexes.filter(index => selectedStrains.has(index)).length;
-    const proCount = visibleIndexes.filter(i => strains[i] && strains[i].tier === 'pro').length;
+    const proCount = visibleIndexes.filter(i => isStrainLocked(strains[i])).length;
     const limit = getSelectionLimit();
     const limitSuffix = isPro ? '' : `/${limit}`;
 
@@ -1471,8 +1579,8 @@
     const mp3Total = strains.filter((strain) => strain.format === 'MP3').length;
     const wavTotal = strains.filter((strain) => strain.format === 'WAV').length;
     const totalAvailable = mp3Total + wavTotal;
-    const freeTotal = strains.filter((strain) => strain.tier === 'free').length;
-    const proTotal = strains.filter((strain) => strain.tier === 'pro').length;
+    const freeTotal = strains.filter((strain) => !isStrainLocked(strain)).length;
+    const proTotal = strains.filter((strain) => isStrainLocked(strain)).length;
 
     if (mp3Count) mp3Count.textContent = String(mp3Total);
     if (wavCount) wavCount.textContent = String(wavTotal);
@@ -1564,7 +1672,7 @@
 
       const visibleFreeIndexes = strains
         .map((strain, index) => ({ strain, index }))
-        .filter(({ strain }) => strain.format === activeFormat && strain.tier !== 'pro')
+        .filter(({ strain }) => strain.format === activeFormat && !isStrainLocked(strain))
         .map(({ index }) => index);
 
       const allVisibleSelected = visibleFreeIndexes.length > 0 &&
@@ -1627,7 +1735,7 @@
 
       const visibleFreeIndexes = strains
         .map((strain, index) => ({ strain, index }))
-        .filter(({ strain }) => strain.format === activeFormat && strain.tier !== 'pro')
+        .filter(({ strain }) => strain.format === activeFormat && !isStrainLocked(strain))
         .map(({ index }) => index);
 
       selectedStrains.clear();
@@ -1853,22 +1961,15 @@
       strains.push({ file, name, format: 'WAV', color, icon, labelImg: lbl(icon), tier: 'pro' });
     });
 
-    // Free strains — trimmed to curated 5 essentials: [batName, displayName, color, icon]
+    // Free strains — brand essentials: [batName, displayName, color, icon]
+    // Free tier only unlocks MP3 variants (WAV stays PRO-only, matching desktop gating).
     [
-      ['Wock', 'Wock', '#6D28D9', 'wock'],
-      ['Tuss', 'Tuss', '#B91C1C', 'tuss'],
-      ['Triss', 'Triss', '#BE185D', 'tris'],
-      ['Basic_Slow', 'Basic Slow', '#22C55E', 'slow'],
-      ['echo.bat', 'Echo', '#2563EB', 'echo']
-    ].forEach(([name, displayName, color, icon]) => {
-      const isFile = name.endsWith('.bat');
-      const labelImg = lbl(icon);
-      if (isFile) {
-        strains.push({ file: name, name: displayName, format: 'WAV', color, icon, labelImg, tier: 'free' });
-      } else {
-        strains.push({ file: `${name}.bat`, name: displayName, format: 'MP3', color, icon, labelImg, tier: 'free' });
-        strains.push({ file: `${name}.bat`, name: displayName, format: 'WAV', color, icon, labelImg, tier: 'free' });
-      }
+      ['mp3Activis_BlackGray.bat', 'Activis Black & Gray', '#F59E0B', 'activis'],
+      ['mp3Wock_Purple.bat', 'Wock Purple', '#6D28D9', 'wock'],
+      ['mp3Tuss_Red.bat', 'Tuss Red', '#B91C1C', 'tuss'],
+      ['mp3Tris_Pink.bat', 'Tris Pink', '#BE185D', 'tris']
+    ].forEach(([file, displayName, color, icon]) => {
+      strains.push({ file, name: displayName, format: 'MP3', color, icon, labelImg: lbl(icon), tier: 'free' });
     });
 
     return strains;
@@ -1878,11 +1979,19 @@
   function showResults(results) {
     const successful = results.filter(r => r.success).length;
     const failed = results.filter(r => !r.success).length;
+    const locked = results.filter(r => r.locked).length;
     
+    let lockedHtml = '';
+    if (locked > 0) {
+      const lockedStrains = results.filter(r => r.locked).map(r => r.strain).join(', ');
+      lockedHtml = `<br><span style="color:#fda4af">${locked} PRO strain${locked === 1 ? '' : 's'} skipped (locked): ${lockedStrains}</span><br>`;
+    }
+
     resultsList.innerHTML = `
       Successfully processed: ${successful}<br>
       ${failed > 0 ? `Failed: ${failed}` : ''}
-      <br><br>
+      ${lockedHtml}
+      <br>
       Files saved to:<br>
       <span style="color: var(--accent)">${outputDir}</span>
     `;

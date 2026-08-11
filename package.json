@@ -34,7 +34,7 @@
     ],
     "extraResources": [
       {
-        "from": "../",
+        "from": "strains",
         "to": "strains",
         "filter": ["*.bat"]
       },

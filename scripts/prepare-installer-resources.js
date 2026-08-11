@@ -7,7 +7,8 @@ const ffmpegDir = path.join(projectRoot, 'build-resources', 'ffmpeg');
 const ffmpegCandidates = [
   process.env.SCREWAI_FFMPEG_PATH,
   process.env.FFMPEG_PATH,
-  'C:\\ffmpeg\\bin\\ffmpeg.exe'
+  'C:\\ffmpeg\\bin\\ffmpeg.exe',
+  'C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe'
 ].filter(Boolean);
 
 function ensureDir(dirPath) {
