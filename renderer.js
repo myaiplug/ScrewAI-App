@@ -18,7 +18,9 @@
   let browserAudioFile = null; // File object for browser mode
   let browserAudioBuffer = null; // decoded AudioBuffer for browser mode
   let isBrowser = false; // true when running outside Electron
-  let isPro = localStorage.getItem('screwai_pro') === 'true';
+  // Never trust localStorage for Pro — web used to unlock on Buy click (piracy hole).
+  // Desktop Pro comes only from main-process license.json after server validate.
+  let isPro = false;
   let licenseEmail = null;
   let licenseKeyMasked = null;
   let wasDragged = false;
@@ -692,13 +694,13 @@
       return processBrowserAudio(file, data.strains);
     },
     getLicenseStatus: async () => {
-      return { pro: localStorage.getItem('screwai_pro') === 'true', email: null, licenseKeyMasked: null, source: null, billingUrl: null };
+      // Browser demo: free strains only. No client-side Pro unlock.
+      return { pro: false, email: null, licenseKeyMasked: null, source: null, billingUrl: 'https://liminal-stemsplit.onrender.com' };
     },
     activateLicense: async () => {
-      return { ok: false, error: 'Activation is only available in the desktop app' };
+      return { ok: false, error: 'Activation is only available in the ScrewAI desktop app. Buy → check email for your key → Activate Pro in the installer.' };
     },
     deactivateLicense: async () => {
-      localStorage.removeItem('screwai_pro');
       return { ok: true, pro: false };
     },
     onProgress: () => {}
@@ -792,10 +794,11 @@
         if (res && res.ok && res.pro) {
           isPro = true;
           licenseEmail = res.email || email;
-          localStorage.setItem('screwai_pro', 'true');
+          licenseKeyMasked = res.licenseKeyMasked || null;
           statusEl.textContent = 'PRO activated — all strains unlocked!';
           statusEl.className = 'pro-activate-status';
           closeProUpsell();
+          strains = await screwaiApi.getStrains();
           renderStrains();
           updateSelectedCount();
           updateFormatCounts();
@@ -817,16 +820,10 @@
     const url = 'https://buy.stripe.com/eVq8wPdqSdb63hugmoffy01';
     const w = window.open(url, '_blank');
     if (!w) { window.location.href = url; }
-    // Browser demo only: keep local unlock. Desktop uses real license activation
-    // after purchase — the emailed license key is entered in the activation form.
-    if (typeof screwaiApi.activateLicense !== 'function' || screwaiApi === fallbackApi) {
-      isPro = true;
-      localStorage.setItem('screwai_pro', 'true');
-      closeProUpsell();
-      renderStrains();
-      updateSelectedCount();
-      updateFormatCounts();
-      showToast('PRO unlocked! All strains are now available.');
+    // Never unlock in-browser without server proof. After payment, buyer gets an
+    // emailed license key and activates inside the desktop installer.
+    if (screwaiApi === fallbackApi) {
+      showToast('After payment, check your email for the license key. Download the desktop app and Activate PRO — web demo stays free-tier only.');
     }
   });
 
@@ -866,7 +863,6 @@
       if (doDeactivate) {
         try {
           await screwaiApi.deactivateLicense();
-          localStorage.removeItem('screwai_pro');
           isPro = false;
           licenseEmail = null;
           licenseKeyMasked = null;
@@ -909,8 +905,15 @@
     if (screwaiApi === fallbackApi) {
       const divider = document.querySelector('.pro-activate-divider');
       const form = document.getElementById('pro-activate-form');
-      if (divider) divider.style.display = 'none';
+      if (divider) {
+        divider.style.display = 'block';
+        const span = divider.querySelector('span');
+        if (span) {
+          span.textContent = 'Web demo = free strains only. Buy PRO → email key → Activate in the Windows desktop app';
+        }
+      }
       if (form) form.style.display = 'none';
+      try { localStorage.removeItem('screwai_pro'); } catch (_) { /* ignore */ }
     }
 
     // Setup event listeners
