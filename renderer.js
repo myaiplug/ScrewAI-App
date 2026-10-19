@@ -1157,12 +1157,8 @@
       './label/tris.png',
       './label/screwai.png',
       './label/screwai2.png',
-      './label/image.png',
       './label/wockheart.png',
-      './label/wocky.png',
-      './label/wocky2.png',
-      './label/ackt.png',
-      './label/acorn.png'
+      './label/ackt.png'
     ];
 
     const columns = getGridColumnCount();
@@ -1868,7 +1864,6 @@
       tris: './label/tris.png',
       quali: './label/quagen.png',
       activis: './label/ackt.png',
-      akorn: './label/acorn.png',
       hydro: './label/wockheart.png',
       echo: './label/purple_screw.png',
       bass: './label/tuss.png',
@@ -1876,7 +1871,6 @@
       barre: './label/screwai.png',
       chop: './label/purple_screw.png',
       tape: './label/screwai2.png',
-      glide: './label/wocky.png',
       master: './label/screwai2.png',
       default: './label/screwai.png'
     };
